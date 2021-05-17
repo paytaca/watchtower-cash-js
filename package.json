@@ -1,0 +1,19 @@
+{
+  "name": "watchtower-cash-js",
+  "version": "0.1.0",
+  "description": "Library for building Javascript applications that integrate with Watchtower.cash",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paytaca/watchtower-cash-js.git"
+  },
+  "author": "Joemar Taganna <joemar@paytaca.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/paytaca/watchtower-cash-js/issues"
+  },
+  "homepage": "https://github.com/paytaca/watchtower-cash-js#readme"
+}
