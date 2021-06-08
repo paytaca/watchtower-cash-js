@@ -16,4 +16,4 @@ const data = {
     recipient: 'simpleledger:qpj6d5d6rk4da08pad8lx4swrxlejerfy5qpvvh3nv'
 }
 
-watchtower.SLP.sendToken(data)
+watchtower.SLP.Type1.send(data)
