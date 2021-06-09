@@ -145,13 +145,14 @@ class SlpType1 {
 
     const tx = transactionBuilder.build()
     const hex = tx.toHex()
-    console.log(`\nTXHEX:\n${hex}`)
+    console.debug(`\nRaw Transaction:\n${hex}\n`)
 
-    const response = this.broadcastTransaction(hex).then(function (resp) {
-      console.log(`\nSUCCESS:\ntxid: ${response.txid}\n`)
-    }).catch(function (error) {
-      console.log(`\nERROR:\n${error.response.data.error}\n`)
-    })
+    try {
+      const response = await this.broadcastTransaction(hex)
+      return response.data
+    } catch (error) {
+      return error.response.data
+    }
 
   }
 

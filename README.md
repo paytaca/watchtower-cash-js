@@ -33,7 +33,15 @@ const data = {
     recipient: 'bitcoincash:qpq82xgmau3acnuvypkyj0khks4a6ak7zq7pzjmnfe'
 }
 
-watchtower.BCH.send(data)
+watchtower.BCH.send(data).then(function (result) {
+    if (result.success) {
+        // Your logic here when send transaction is successful
+        console.log(result.txid)
+    } else {
+        // Your logic here when send transaction fails
+        console.log(result.error)
+    }
+})
 ```
 
 ### Sending Type1 SLP Token
@@ -56,5 +64,13 @@ const data = {
     recipient: 'simpleledger:qpq82xgmau3acnuvypkyj0khks4a6ak7zqj6ffwnh8'
 }
 
-watchtower.SLP.Type1.send(data)
+watchtower.SLP.Type1.send(data).then(function (result) {
+    if (result.success) {
+        // Your logic here when send transaction is successful
+        console.log(result.txid)
+    } else {
+        // Your logic here when send transaction fails
+        console.log(result.error)
+    }
+})
 ```
