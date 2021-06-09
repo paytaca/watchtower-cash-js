@@ -1,5 +1,6 @@
 const BCH = require('./bch')
 const SLP = require('./slp')
+const axios = require('axios')
 
 class Watchtower {
   constructor () {
@@ -7,6 +8,11 @@ class Watchtower {
 
     this.BCH = new BCH(_baseUrl)
     this.SLP = new SLP(_baseUrl)
+  }
+
+  async subscribe (address) {
+    const resp = await axios.post(this._baseUrl, { address: address })
+    return resp
   }
 }
 
