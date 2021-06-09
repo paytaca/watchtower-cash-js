@@ -3,13 +3,13 @@
 Library for building Javascript applications that integrate with Watchtower.cash
 
 ### Install
-```
+```bash
 npm install watchtower-cash-js
 ```
 
 ### Subscribe an Address
 For Watchtower to keep watch of the transactions of an address, it needs to be subscribed. A convenient function is included here to subscribe an address.
-```
+```javascript
 const Watchtower = require('watchtower-cash-js')
 
 const watchtower = new Watchtower()
@@ -19,7 +19,7 @@ watchtower.subscribe('simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x')
 ```
 
 ### Sending BCH
-```
+```javascript
 const Watchtower = require('watchtower-cash-js')
 
 const watchtower = new Watchtower()
@@ -37,7 +37,7 @@ watchtower.BCH.send(data)
 ```
 
 ### Sending Type1 SLP Token
-```
+```javascript
 const Watchtower = require('watchtower-cash-js')
 
 const watchtower = new Watchtower()
