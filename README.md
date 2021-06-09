@@ -10,7 +10,7 @@ npm install watchtower-cash-js
 ### Subscribe an Address
 For Watchtower to keep watch of the transactions of an address, it needs to be subscribed. A convenient function is included here to subscribe an address.
 ```
-const Watchtower = require('watchtower')
+const Watchtower = require('watchtower-cash-js')
 
 const watchtower = new Watchtower()
 
@@ -20,7 +20,7 @@ watchtower.subscribe('simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x')
 
 ### Sending BCH
 ```
-const Watchtower = require('watchtower')
+const Watchtower = require('watchtower-cash-js')
 
 const watchtower = new Watchtower()
 
@@ -38,7 +38,7 @@ watchtower.BCH.send(data)
 
 ### Sending Type1 SLP Token
 ```
-const Watchtower = require('watchtower')
+const Watchtower = require('watchtower-cash-js')
 
 const watchtower = new Watchtower()
 
