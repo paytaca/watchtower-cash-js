@@ -59,7 +59,7 @@ class SlpType1 {
   }
 
   async broadcastTransaction(txHex) {
-    const resp = await this._api.post('broadcast', { transaction: txHex })
+    const resp = await this._api.post('broadcast/', { transaction: txHex })
     return resp.data.txid
   }
 
@@ -72,9 +72,12 @@ class SlpType1 {
 
     let transactionBuilder = new bchjs.TransactionBuilder()
     let outputsCount = 0
+    let totalInput = 0
+    let totalOutput = 0
 
     for (let i = 0; i < slpUtxos.length; i++) {
       transactionBuilder.addInput(slpUtxos[i].tx_hash, slpUtxos[i].tx_pos)
+      totalInput += slpUtxos[i].value
       keyPairs.push(slpKeyPair)
     }
 
@@ -82,6 +85,7 @@ class SlpType1 {
       slpUtxos,
       amount
     )
+
     const slpData = slpSendObj.script
     transactionBuilder.addOutput(slpData, 0)
 
@@ -90,6 +94,7 @@ class SlpType1 {
       546
     )
     outputsCount += 1
+    totalOutput += 546
 
     if (slpSendObj.outputs > 1) {
       transactionBuilder.addOutput(
@@ -97,30 +102,41 @@ class SlpType1 {
         546
       )
       outputsCount += 1
+      totalOutput += 546
     }
 
     const inputsCount = slpUtxos.length + 1  // Add extra for BCH fee funding UTXO
+    outputsCount += 2  // Add extra for sending the SLP and BCH changes,if any
+
     let byteCount = bchjs.BitcoinCash.getByteCount(
       {
         P2PKH: inputsCount
       },
       {
-        P2PKH: outputsCount + 1  // Add extra for sending the BCH change,if any
+        P2PKH: outputsCount
       }
     )
     byteCount += slpData.length  // Account for SLP OP_RETURN data byte count
-    const txFee = Math.ceil(byteCount * 1.1)  // 1.1 sats/byte fee rate
+    console.log(`Byte count: ${byteCount}`)
+    const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
+    console.log(`Fee: ${txFee}`)
     const bchUtxos = await this.getBchUtxos(bchFunder.address, txFee)
     const bchKeyPair = bchjs.ECPair.fromWIF(bchFunder.wif)
     const cumulativeValue = bchUtxos.cumulativeValue
     
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
+      totalInput += bchUtxos.utxos[i].value
       keyPairs.push(bchKeyPair)
     }
 
     // Last output: send the BCH change back to the wallet.
-    const remainder = cumulativeValue - txFee
+    const remainder = totalInput - (totalOutput + txFee)
+    if (remainder < 0) {
+      console.error(bchUtxos)
+      return `error: bch funder does not have enough balance to cover the ${txFee} satoshis fee`
+    }
+
     if (remainder > 0) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(bchFunder.address),
