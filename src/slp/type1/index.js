@@ -60,7 +60,7 @@ class SlpType1 {
 
   async broadcastTransaction(txHex) {
     const resp = await this._api.post('broadcast/', { transaction: txHex })
-    return resp.data.txid
+    return resp
   }
 
   async send({ sender, bchFunder, tokenId, amount, recipient }) {
@@ -117,9 +117,7 @@ class SlpType1 {
       }
     )
     byteCount += slpData.length  // Account for SLP OP_RETURN data byte count
-    console.log(`Byte count: ${byteCount}`)
     const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
-    console.log(`Fee: ${txFee}`)
     const bchUtxos = await this.getBchUtxos(bchFunder.address, txFee)
     const bchKeyPair = bchjs.ECPair.fromWIF(bchFunder.wif)
     const cumulativeValue = bchUtxos.cumulativeValue
@@ -161,7 +159,7 @@ class SlpType1 {
 
     const tx = transactionBuilder.build()
     const hex = tx.toHex()
-    console.debug(`\nRaw Transaction:\n${hex}\n`)
+    // console.debug(`\nRaw Transaction:\n${hex}\n`)
 
     try {
       const response = await this.broadcastTransaction(hex)
