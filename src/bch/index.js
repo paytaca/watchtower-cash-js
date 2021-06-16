@@ -28,47 +28,73 @@ class BCH {
         return {
           tx_hash: item.txid,
           tx_pos: item.vout,
-          value: item.value
+          value: Math.floor(item.value)
         }
       })
     }
   }
 
   async broadcastTransaction(txHex) {
-    const resp = await this._api.post('broadcast', { transaction: txHex })
-    return resp.data.txid
+    const resp = await this._api.post('broadcast/', { transaction: txHex })
+    return resp
   }
 
   async send({ sender, amount, recipient }) {
 
-    // const txFee = Math.ceil(byteCount * 1.1)  // 1.1 sats/byte fee rate
+    if (recipient.indexOf('bitcoincash') < 0) {
+      return {
+        success: false,
+        error: 'recipient should be a BCH address'
+      }
+    }
+
     const bchUtxos = await this.getBchUtxos(sender.address, amount)
     const bchKeyPair = bchjs.ECPair.fromWIF(sender.wif)
-    const cumulativeValue = bchUtxos.cumulativeValue
-    
-    for (let i = 0; i < bchUtxos.utxos.length; i++) {
-      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
-      keyPairs.push(bchKeyPair)
-    }
 
     let transactionBuilder = new bchjs.TransactionBuilder()
     let outputsCount = 0
+    let totalInput = 0
+    let totalOutput = 0
+    
+    for (let i = 0; i < bchUtxos.utxos.length; i++) {
+      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
+      totalInput += bchUtxos.utxos[i].value
+    }
 
-    const inputsCount = slpUtxos.length + 1  // Add extra for BCH fee funding UTXO
+    const sendAmount = amount * (10 ** 8)
+    if (totalInput < sendAmount) {
+      return {
+        success: false,
+        error: 'not enough balance to cover the send amount'
+      }
+    }
+
+    const inputsCount = bchUtxos.utxos.length
+
+    transactionBuilder.addOutput(
+      bchjs.Address.toLegacyAddress(recipient),
+      sendAmount
+    )
+    outputsCount += 1
+    totalOutput += sendAmount
+
+    outputsCount += 1  // Add extra for sending the BCH change,if any
     let byteCount = bchjs.BitcoinCash.getByteCount(
       {
         P2PKH: inputsCount
       },
       {
-        P2PKH: outputsCount + 1  // Add extra for sending the BCH change,if any
+        P2PKH: outputsCount
       }
     )
 
-    // Last output: send the BCH change back to the wallet.
-    const remainder = cumulativeValue - txFee
+    const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
+    const remainder = totalInput - (totalOutput + txFee)
+
+    // Send the BCH change back to the wallet, if any
     if (remainder > 0) {
       transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(bchFunder.address),
+        bchjs.Address.toLegacyAddress(sender.address),
         remainder
       )
     }

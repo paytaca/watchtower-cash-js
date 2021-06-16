@@ -52,7 +52,7 @@ class SlpType1 {
         return {
           tx_hash: item.txid,
           tx_pos: item.vout,
-          value: item.value
+          value: Math.floor(item.value)
         }
       })
     }
@@ -64,6 +64,13 @@ class SlpType1 {
   }
 
   async send({ sender, bchFunder, tokenId, amount, recipient }) {
+
+    if (recipient.indexOf('simpleledger') < 0) {
+      return {
+        success: false,
+        error: 'recipient should be an SLP address'
+      }
+    }
 
     const slpUtxos = await this.getSlpUtxos(sender.address, tokenId, amount)
     const slpKeyPair = bchjs.ECPair.fromWIF(sender.wif)
@@ -120,7 +127,6 @@ class SlpType1 {
     const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
     const bchUtxos = await this.getBchUtxos(bchFunder.address, txFee)
     const bchKeyPair = bchjs.ECPair.fromWIF(bchFunder.wif)
-    const cumulativeValue = bchUtxos.cumulativeValue
     
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
@@ -131,8 +137,10 @@ class SlpType1 {
     // Last output: send the BCH change back to the wallet.
     const remainder = totalInput - (totalOutput + txFee)
     if (remainder < 0) {
-      console.error(bchUtxos)
-      return `error: bch funder does not have enough balance to cover the ${txFee} satoshis fee`
+      return {
+        success: false,
+        error: `bch funder does not have enough balance to cover the ${txFee} satoshis fee`
+      }
     }
 
     if (remainder > 0) {
