@@ -12,8 +12,12 @@ const data = {
         wif: 'YYY' // <-- private key of the bchFunder address
     },
     tokenId: '7f8889682d57369ed0e32336f8b7e0ffec625a35cca183f4e81fde4e71a538a1',
-    amount: 101,
-    recipient: 'simpleledger:qpq82xgmau3acnuvypkyj0khks4a6ak7zqj6ffwnh8'
+    recipients: [
+        {
+            address: 'simpleledger:qpq82xgmau3acnuvypkyj0khks4a6ak7zqj6ffwnh8',
+            amount: 101
+        }
+    ]
 }
 
 watchtower.SLP.Type1.send(data).then(function (result) {

@@ -1,6 +1,7 @@
 const axios = require('axios')
 const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
+const OpReturnGenerator = require('./op_returns')
 
 class SlpType1 {
 
@@ -10,7 +11,7 @@ class SlpType1 {
     })
   }
 
-  async getSlpUtxos (address, tokenId, amount) {
+  async getSlpUtxos(address, tokenId, amount) {
     const resp = await this._api.get(`utxo/slp/${address}/${tokenId}`)
     let cumulativeAmount = 0
     let filteredUtxos = []
@@ -22,16 +23,19 @@ class SlpType1 {
         break
       }
     }
-    return filteredUtxos.map(function (item) {
-      return {
-        tokenId: item.tokenid,
-        tx_hash: item.txid,
-        tx_pos: item.vout,
-        tokenQty: item.amount,
-        decimals: item.decimals,
-        value: 546
-      }
-    })
+    return {
+      cumulativeAmount: cumulativeAmount,
+      utxos: filteredUtxos.map(function (item) {
+        return {
+          tokenId: item.tokenid,
+          tx_hash: item.txid,
+          tx_pos: item.vout,
+          tokenQty: item.amount,
+          decimals: item.decimals,
+          value: 546
+        }
+      })
+    }
   }
 
   async getBchUtxos (address, value) {
@@ -63,56 +67,84 @@ class SlpType1 {
     return resp
   }
 
-  async send({ sender, bchFunder, tokenId, amount, recipient }) {
+  async send({ sender, bchFunder, tokenId, recipients, broadcast }) {
+    if (broadcast == undefined) {
+      broadcast = true
+    }
 
-    if (recipient.indexOf('simpleledger') < 0) {
-      return {
-        success: false,
-        error: 'recipient should be an SLP address'
+    let totalTokenSendAmounts = 0
+    let tokenSendAmounts = recipients.map(function (recipient) {
+      totalTokenSendAmounts += recipient.amount
+      return recipient.amount
+    })
+
+    const slpUtxos = await this.getSlpUtxos(sender.address, tokenId, tokenSendAmounts)
+    for (let i = 0; i < recipients.length; i++) {
+      const recipient = recipients[i]
+      if (recipient.address.indexOf('simpleledger') < 0) {
+        return {
+          success: false,
+          error: 'recipient should have an SLP address'
+        }
       }
     }
 
-    const slpUtxos = await this.getSlpUtxos(sender.address, tokenId, amount)
-    const slpKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+    if (tokenSendAmounts > slpUtxos.cumulativeAmount) {
+      return {
+        success: false,
+        error: `not enough balance (${slpUtxos.cumulativeAmount}) to cover the send amount (${tokenSendAmounts})`
+      }
+    }
 
+    const slpKeyPair = bchjs.ECPair.fromWIF(sender.wif)
     const keyPairs = []
 
     let transactionBuilder = new bchjs.TransactionBuilder()
     let outputsCount = 0
-    let totalInput = 0
-    let totalOutput = 0
+    let totalInputSats = 0
+    let totalOutputSats = 0
 
-    for (let i = 0; i < slpUtxos.length; i++) {
-      transactionBuilder.addInput(slpUtxos[i].tx_hash, slpUtxos[i].tx_pos)
-      totalInput += slpUtxos[i].value
+    let totalInputTokens = 0
+
+    for (let i = 0; i < slpUtxos.utxos.length; i++) {
+      transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
+      totalInputSats += slpUtxos.utxos[i].value
+      totalInputTokens += slpUtxos.utxos[i].tokenQty
       keyPairs.push(slpKeyPair)
     }
 
-    const slpSendObj = bchjs.SLP.TokenType1.generateSendOpReturn(
-      slpUtxos,
-      amount
+    const tokenRemainder = totalInputTokens - totalTokenSendAmounts
+    tokenSendAmounts.push(tokenRemainder)
+
+    const slpGen = new OpReturnGenerator()
+    const slpSendData = slpGen.generateSendOpReturn(
+      {
+        tokenId: tokenId,
+        decimals: slpUtxos.utxos[0].decimals,
+        sendAmounts: tokenSendAmounts
+      }
     )
+    transactionBuilder.addOutput(slpSendData, 0)
 
-    const slpData = slpSendObj.script
-    transactionBuilder.addOutput(slpData, 0)
+    recipients.map(function (recipient) {
+      transactionBuilder.addOutput(
+        bchjs.SLP.Address.toLegacyAddress(recipient.address),
+        546
+      )
+      outputsCount += 1
+      totalOutputSats += 546
+    })
 
-    transactionBuilder.addOutput(
-      bchjs.SLP.Address.toLegacyAddress(recipient),
-      546
-    )
-    outputsCount += 1
-    totalOutput += 546
-
-    if (slpSendObj.outputs > 1) {
+    if (tokenRemainder > 0) {
       transactionBuilder.addOutput(
         bchjs.SLP.Address.toLegacyAddress(sender.address),
         546
       )
       outputsCount += 1
-      totalOutput += 546
+      totalOutputSats += 546
     }
 
-    const inputsCount = slpUtxos.length + 1  // Add extra for BCH fee funding UTXO
+    const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
     outputsCount += 2  // Add extra for sending the SLP and BCH changes,if any
 
     let byteCount = bchjs.BitcoinCash.getByteCount(
@@ -123,34 +155,34 @@ class SlpType1 {
         P2PKH: outputsCount
       }
     )
-    byteCount += slpData.length  // Account for SLP OP_RETURN data byte count
+    byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
     const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
     const bchUtxos = await this.getBchUtxos(bchFunder.address, txFee)
     const bchKeyPair = bchjs.ECPair.fromWIF(bchFunder.wif)
     
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
-      totalInput += bchUtxos.utxos[i].value
+      totalInputSats += bchUtxos.utxos[i].value
       keyPairs.push(bchKeyPair)
     }
 
     // Last output: send the BCH change back to the wallet.
-    const remainder = totalInput - (totalOutput + txFee)
-    if (remainder < 0) {
+    const remainderSats = totalInputSats - (totalOutputSats + txFee)
+    if (remainderSats < 0) {
       return {
         success: false,
-        error: `bch funder does not have enough balance to cover the ${txFee} satoshis fee`
+        error: `bch funder does not have enough balance (${totalInputSats}) to cover the transaction fee (${txFee})`
       }
     }
 
-    if (remainder > 0) {
+    if (remainderSats > 0) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(bchFunder.address),
-        remainder
+        remainderSats
       )
     }
 
-    const combinedUtxos = slpUtxos.concat(bchUtxos.utxos)
+    const combinedUtxos = slpUtxos.utxos.concat(bchUtxos.utxos)
 
     // Sign each token UTXO being consumed.
     let redeemScript
@@ -167,13 +199,19 @@ class SlpType1 {
 
     const tx = transactionBuilder.build()
     const hex = tx.toHex()
-    // console.debug(`\nRaw Transaction:\n${hex}\n`)
 
-    try {
-      const response = await this.broadcastTransaction(hex)
-      return response.data
-    } catch (error) {
-      return error.response.data
+    if (broadcast === true) {
+      try {
+        const response = await this.broadcastTransaction(hex)
+        return response.data
+      } catch (error) {
+        return error.response.data
+      }
+    } else {
+      return {
+        success: true,
+        transaction: hex
+      }
     }
 
   }

@@ -50,7 +50,7 @@ class BCH {
       if (recipient.address.indexOf('bitcoincash') < 0) {
         return {
           success: false,
-          error: 'recipient should be a BCH address'
+          error: 'recipient should have a BCH address'
         }
       }
       totalSendAmount += recipient.amount
@@ -58,6 +58,12 @@ class BCH {
 
     const totalSendAmountSats = totalSendAmount * (10 ** 8)
     const bchUtxos = await this.getBchUtxos(sender.address, totalSendAmountSats)
+    if (bchUtxos.cumulativeValue < totalSendAmountSats) {
+      return {
+        success: false,
+        error: `not enough balance (${totalInput}) to cover the send amount (${totalSendAmountSats})`
+      }
+    }
     const bchKeyPair = bchjs.ECPair.fromWIF(sender.wif)
 
     let transactionBuilder = new bchjs.TransactionBuilder()
@@ -68,13 +74,6 @@ class BCH {
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInput += bchUtxos.utxos[i].value
-    }
-
-    if (totalInput < totalSendAmountSats) {
-      return {
-        success: false,
-        error: `not enough balance (${totalInput}) to cover the send amount (${totalSendAmountSats})`
-      }
     }
 
     const inputsCount = bchUtxos.utxos.length

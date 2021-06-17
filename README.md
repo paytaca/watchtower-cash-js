@@ -18,10 +18,10 @@ const watchtower = new Watchtower()
 let address = 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x'
 watchtower.subscribe(address).then(function (result) {
     if (result.success) {
-        // Your logic here when send transaction is successful
+        // Your logic here when subscription is successful
         console.log(result)
     } else {
-        // Your logic here when send transaction fails
+        // Your logic here when subscription fails
         console.log(result)
     }
 })
@@ -43,6 +43,7 @@ const data = {
             address: 'bitcoincash:qpq82xgmau3acnuvypkyj0khks4a6ak7zq7pzjmnfe',
             amount: 0.5
         }
+        // <-- You can add more recipients into this array
     ],
     broadcast: true  // true by default
 }
@@ -77,8 +78,13 @@ const data = {
         wif: 'YYY' // <-- private key of the bchFunder address
     },
     tokenId: '7f8889682d57369ed0e32336f8b7e0ffec625a35cca183f4e81fde4e71a538a1',
-    amount: 101,
-    recipient: 'simpleledger:qpq82xgmau3acnuvypkyj0khks4a6ak7zqj6ffwnh8'
+    recipients: [
+        {
+            address: 'simpleledger:qpq82xgmau3acnuvypkyj0khks4a6ak7zqj6ffwnh8',
+            amount: 101
+        } // <-- You can add more recipients into this array
+    ],
+    broadcast: true  // true by default
 }
 
 watchtower.SLP.Type1.send(data).then(function (result) {
