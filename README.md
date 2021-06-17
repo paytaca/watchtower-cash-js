@@ -15,7 +15,16 @@ const Watchtower = require('watchtower-cash-js')
 const watchtower = new Watchtower()
 
 // Subscribe function accepts either BCH or SLP address
-watchtower.subscribe('simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x')
+let address = 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x'
+watchtower.subscribe(address).then(function (result) {
+    if (result.success) {
+        // Your logic here when send transaction is successful
+        console.log(result)
+    } else {
+        // Your logic here when send transaction fails
+        console.log(result)
+    }
+})
 ```
 
 ### Sending BCH
