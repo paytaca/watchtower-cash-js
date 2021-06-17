@@ -34,13 +34,17 @@ const data = {
             address: 'bitcoincash:qpq82xgmau3acnuvypkyj0khks4a6ak7zq7pzjmnfe',
             amount: 0.5
         }
-    ]
+    ],
+    broadcast: true  // true by default
 }
 
 watchtower.BCH.send(data).then(function (result) {
     if (result.success) {
         // Your logic here when send transaction is successful
         console.log(result.txid)
+
+        // or if broadcast is set to false, you can get the raw transaction hex by
+        console.log(result.transaction)
     } else {
         // Your logic here when send transaction fails
         console.log(result.error)

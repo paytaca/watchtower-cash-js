@@ -12,7 +12,8 @@ const data = {
       address: 'bitcoincash:qr2evcvc92y8pqu4n85zu24qanlh9lxsdsm7zff6ka',
       amount: 1
     }
-  ]
+  ],
+  broadcast: true
 }
 
 watchtower.BCH.send(data).then(function (result) {

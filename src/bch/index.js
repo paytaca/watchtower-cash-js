@@ -39,7 +39,10 @@ class BCH {
     return resp
   }
 
-  async send({ sender, recipients }) {
+  async send({ sender, recipients, broadcast }) {
+    if (broadcast == undefined) {
+      broadcast = true
+    }
 
     let totalSendAmount = 0
     for (let i = 0; i < recipients.length; i++) {
@@ -53,7 +56,8 @@ class BCH {
       totalSendAmount += recipient.amount
     }
 
-    const bchUtxos = await this.getBchUtxos(sender.address, totalSendAmount)
+    const totalSendAmountSats = totalSendAmount * (10 ** 8)
+    const bchUtxos = await this.getBchUtxos(sender.address, totalSendAmountSats)
     const bchKeyPair = bchjs.ECPair.fromWIF(sender.wif)
 
     let transactionBuilder = new bchjs.TransactionBuilder()
@@ -66,7 +70,6 @@ class BCH {
       totalInput += bchUtxos.utxos[i].value
     }
 
-    const totalSendAmountSats = totalSendAmount * (10 ** 8)
     if (totalInput < totalSendAmountSats) {
       return {
         success: false,
@@ -123,14 +126,19 @@ class BCH {
 
     const tx = transactionBuilder.build()
     const hex = tx.toHex()
-    console.debug(`\nRaw Transaction:\n${hex}\n`)
 
-    try {
-      const response = await this.broadcastTransaction(hex)
-      return response.data
-    } catch (error) {
-      console.log(bchUtxos)
-      return error.response.data
+    if (broadcast === true) {
+      try {
+        const response = await this.broadcastTransaction(hex)
+        return response.data
+      } catch (error) {
+        return error.response.data
+      }
+    } else {
+      return {
+        success: true,
+        transaction: hex
+      }
     }
 
   }
