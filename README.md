@@ -53,7 +53,7 @@ watchtower.BCH.send(data).then(function (result) {
         // Your logic here when send transaction is successful
         console.log(result.txid)
 
-        // or if broadcast is set to false, you can get the raw transaction hex by
+        // or if broadcast is set to false, you can just get the raw transaction hex
         console.log(result.transaction)
     } else {
         // Your logic here when send transaction fails
@@ -91,6 +91,9 @@ watchtower.SLP.Type1.send(data).then(function (result) {
     if (result.success) {
         // Your logic here when send transaction is successful
         console.log(result.txid)
+
+        // or if broadcast is set to false, you can just get the raw transaction hex
+        console.log(result.transaction)
     } else {
         // Your logic here when send transaction fails
         console.log(result.error)
