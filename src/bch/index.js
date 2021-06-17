@@ -16,7 +16,7 @@ class BCH {
     let filteredUtxos = []
     const utxos = resp.data.utxos
     for (let i = 0; i < utxos.length; i++) {
-      cumulativeValue += utxos[i].value
+      cumulativeValue += Math.floor(utxos[i].value)
       filteredUtxos.push(utxos[i])
       if (cumulativeValue >= value) {
         break
@@ -39,16 +39,21 @@ class BCH {
     return resp
   }
 
-  async send({ sender, amount, recipient }) {
+  async send({ sender, recipients }) {
 
-    if (recipient.indexOf('bitcoincash') < 0) {
-      return {
-        success: false,
-        error: 'recipient should be a BCH address'
+    let totalSendAmount = 0
+    for (let i = 0; i < recipients.length; i++) {
+      const recipient = recipients[i]
+      if (recipient.address.indexOf('bitcoincash') < 0) {
+        return {
+          success: false,
+          error: 'recipient should be a BCH address'
+        }
       }
+      totalSendAmount += recipient.amount
     }
 
-    const bchUtxos = await this.getBchUtxos(sender.address, amount)
+    const bchUtxos = await this.getBchUtxos(sender.address, totalSendAmount)
     const bchKeyPair = bchjs.ECPair.fromWIF(sender.wif)
 
     let transactionBuilder = new bchjs.TransactionBuilder()
@@ -61,22 +66,26 @@ class BCH {
       totalInput += bchUtxos.utxos[i].value
     }
 
-    const sendAmount = amount * (10 ** 8)
-    if (totalInput < sendAmount) {
+    const totalSendAmountSats = totalSendAmount * (10 ** 8)
+    if (totalInput < totalSendAmountSats) {
       return {
         success: false,
-        error: 'not enough balance to cover the send amount'
+        error: `not enough balance (${totalInput}) to cover the send amount (${totalSendAmountSats})`
       }
     }
 
     const inputsCount = bchUtxos.utxos.length
 
-    transactionBuilder.addOutput(
-      bchjs.Address.toLegacyAddress(recipient),
-      sendAmount
-    )
-    outputsCount += 1
-    totalOutput += sendAmount
+    for (let i = 0; i < recipients.length; i++) {
+      const recipient = recipients[i]
+      const sendAmount = Math.floor(recipient.amount * (10 ** 8))
+      transactionBuilder.addOutput(
+        bchjs.Address.toLegacyAddress(recipient.address),
+        sendAmount
+      )
+      outputsCount += 1
+      totalOutput += sendAmount
+    }
 
     outputsCount += 1  // Add extra for sending the BCH change,if any
     let byteCount = bchjs.BitcoinCash.getByteCount(
@@ -120,6 +129,7 @@ class BCH {
       const response = await this.broadcastTransaction(hex)
       return response.data
     } catch (error) {
+      console.log(bchUtxos)
       return error.response.data
     }
 

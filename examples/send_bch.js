@@ -7,8 +7,12 @@ const data = {
     address: 'bitcoincash:qp6ls99pxdfsvue4jqhla0esjjm7h685xu5q03v058',
     wif: 'XXX'  // <-- private key of the sender address
   },
-  amount: 222,
-  recipient: 'simpleledger:qqlgs6e0gnnae5utxvf70degnk6s9xmjt5ljpk673h'
+  recipients: [
+    {
+      address: 'bitcoincash:qr2evcvc92y8pqu4n85zu24qanlh9lxsdsm7zff6ka',
+      amount: 1
+    }
+  ]
 }
 
 watchtower.BCH.send(data).then(function (result) {
