@@ -17,24 +17,26 @@ class SlpType1 {
     let filteredUtxos = []
     const utxos = resp.data.utxos
     for (let i = 0; i < utxos.length; i++) {
-      cumulativeAmount += utxos[i].amount
       filteredUtxos.push(utxos[i])
       if (cumulativeAmount >= amount) {
         break
       }
     }
+    cumulativeAmount = 0
+    const finalUtxos = filteredUtxos.map(function (item) {
+      const amount = Math.floor(item.amount * (10 ** item.decimals))
+      cumulativeAmount += amount
+      return {
+        tokenId: item.tokenid,
+        tx_hash: item.txid,
+        tx_pos: item.vout,
+        amount: amount,
+        value: 546
+      }
+    })
     return {
       cumulativeAmount: cumulativeAmount,
-      utxos: filteredUtxos.map(function (item) {
-        return {
-          tokenId: item.tokenid,
-          tx_hash: item.txid,
-          tx_pos: item.vout,
-          tokenQty: item.amount,
-          decimals: item.decimals,
-          value: 546
-        }
-      })
+      utxos: finalUtxos
     }
   }
 
@@ -109,11 +111,11 @@ class SlpType1 {
     for (let i = 0; i < slpUtxos.utxos.length; i++) {
       transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
       totalInputSats += slpUtxos.utxos[i].value
-      totalInputTokens += slpUtxos.utxos[i].tokenQty
+      totalInputTokens += slpUtxos.utxos[i].amount
       keyPairs.push(slpKeyPair)
     }
 
-    const tokenRemainder = totalInputTokens - totalTokenSendAmounts
+    let tokenRemainder = totalInputTokens - totalTokenSendAmounts
     if (tokenRemainder > 0) {
       tokenSendAmounts.push(tokenRemainder)
     }
@@ -122,7 +124,6 @@ class SlpType1 {
     const slpSendData = slpGen.generateSendOpReturn(
       {
         tokenId: tokenId,
-        decimals: slpUtxos.utxos[0].decimals,
         sendAmounts: tokenSendAmounts
       }
     )
@@ -170,12 +171,6 @@ class SlpType1 {
 
     // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats - (totalOutputSats + txFee)
-    if (remainderSats < 0) {
-      return {
-        success: false,
-        error: `bch funder does not have enough balance (${totalInputSats}) to cover the transaction fee (${txFee})`
-      }
-    }
 
     if (remainderSats > 0) {
       transactionBuilder.addOutput(

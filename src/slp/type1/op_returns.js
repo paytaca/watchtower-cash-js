@@ -6,11 +6,11 @@ class OpReturnGenerator {
 
   constructor () {}
 
-  generateSendOpReturn({ tokenId, decimals, sendAmounts }) {
+  generateSendOpReturn({ tokenId, sendAmounts }) {
     try {
       
       let amounts = sendAmounts.map(function (amount) {
-        return new BigNumber(amount).times(10 ** decimals)
+        return new BigNumber(amount)
       })
 
       const script = slpMdm.TokenType1.send(tokenId, amounts)

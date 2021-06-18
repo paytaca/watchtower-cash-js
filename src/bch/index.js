@@ -61,7 +61,7 @@ class BCH {
     if (bchUtxos.cumulativeValue < totalSendAmountSats) {
       return {
         success: false,
-        error: `not enough balance (${totalInput}) to cover the send amount (${totalSendAmountSats})`
+        error: `not enough balance (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
       }
     }
     const bchKeyPair = bchjs.ECPair.fromWIF(sender.wif)
