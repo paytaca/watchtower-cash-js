@@ -114,7 +114,9 @@ class SlpType1 {
     }
 
     const tokenRemainder = totalInputTokens - totalTokenSendAmounts
-    tokenSendAmounts.push(tokenRemainder)
+    if (tokenRemainder > 0) {
+      tokenSendAmounts.push(tokenRemainder)
+    }
 
     const slpGen = new OpReturnGenerator()
     const slpSendData = slpGen.generateSendOpReturn(
