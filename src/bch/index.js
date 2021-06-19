@@ -1,6 +1,7 @@
 const axios = require('axios')
 const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
+const BigNumber = require('bignumber.js')
 
 class BCH {
 
@@ -12,11 +13,11 @@ class BCH {
 
   async getBchUtxos (address, value) {
     const resp = await this._api.get(`utxo/bch/${address}`)
-    let cumulativeValue = 0
+    let cumulativeValue = new BigNumber(0)
     let filteredUtxos = []
     const utxos = resp.data.utxos
     for (let i = 0; i < utxos.length; i++) {
-      cumulativeValue += Math.floor(utxos[i].value)
+      cumulativeValue = cumulativeValue.plus(utxos[i].value)
       filteredUtxos.push(utxos[i])
       if (cumulativeValue >= value) {
         break
@@ -28,7 +29,7 @@ class BCH {
         return {
           tx_hash: item.txid,
           tx_pos: item.vout,
-          value: Math.floor(item.value)
+          value: new BigNumber(item.value)
         }
       })
     }
@@ -69,12 +70,12 @@ class BCH {
 
     let transactionBuilder = new bchjs.TransactionBuilder()
     let outputsCount = 0
-    let totalInput = 0
-    let totalOutput = 0
+    let totalInput = new BigNumber(0)
+    let totalOutput = new BigNumber(0)
     
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
-      totalInput += bchUtxos.utxos[i].value
+      totalInput = totalInput.plus(bchUtxos.utxos[i].value)
       const senderKeyPair = bchjs.ECPair.fromWIF(sender.wif)
       keyPairs.push(senderKeyPair)
     }
@@ -83,13 +84,13 @@ class BCH {
 
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      const sendAmount = Math.floor(recipient.amount * (10 ** 8))
+      const sendAmount = new BigNumber(recipient.amount).times(10 ** 8)
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(recipient.address),
-        sendAmount
+        parseInt(sendAmount)
       )
       outputsCount += 1
-      totalOutput += sendAmount
+      totalOutput = totalOutput.plus(sendAmount)
     }
 
     if (feeFunder !== undefined) {
@@ -129,38 +130,38 @@ class BCH {
         }
       }
 
-      let feeInputContrib = 0
+      // Send BCH change back to sender address, if any
+      senderRemainder = totalInput.minus(totalOutput)
+      if (senderRemainder > 0) {
+        transactionBuilder.addOutput(
+          bchjs.Address.toLegacyAddress(sender.address),
+          parseInt(senderRemainder)
+        )
+      }
+      
+      let feeInputContrib = new BigNumber(0)
       for (let i = 0; i < feeFunderUtxos.utxos.length; i++) {
         transactionBuilder.addInput(feeFunderUtxos.utxos[i].tx_hash, feeFunderUtxos.utxos[i].tx_pos)
-        totalInput += feeFunderUtxos.utxos[i].value
-        feeInputContrib += feeFunderUtxos.utxos[i].value
+        totalInput = totalInput.plus(feeFunderUtxos.utxos[i].value)
+        feeInputContrib = feeInputContrib.plus(feeFunderUtxos.utxos[i].value)
         const feeFunderKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
         keyPairs.push(feeFunderKeyPair)
       }
 
-      // Send BCH change back to sender address, if any
-      senderRemainder = totalInput - feeInputContrib - totalOutput
-      if (senderRemainder > 0) {
-        transactionBuilder.addOutput(
-          bchjs.Address.toLegacyAddress(sender.address),
-          senderRemainder
-        )
-      }
-
-      const feeFunderRemainder = feeInputContrib - txFee
+      const feeFunderRemainder = feeInputContrib.minus(txFee)
       if (feeFunderRemainder > 0) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(feeFunder.address),
-          feeFunderRemainder
+          parseInt(feeFunderRemainder)
         )
       }
     } else {
       // Send the BCH change back to the wallet, if any
-      senderRemainder = totalInput - (totalOutput + txFee)
+      senderRemainder = totalInput.minus(totalOutput.plus(txFee))
       if (senderRemainder > 0) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(sender.address),
-          senderRemainder
+          parseInt(senderRemainder)
         )
       }
     }
@@ -179,7 +180,7 @@ class BCH {
         keyPairs[i],
         redeemScript,
         transactionBuilder.hashTypes.SIGHASH_ALL,
-        utxo.value
+        parseInt(utxo.value)
       )
     }
 
