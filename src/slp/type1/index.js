@@ -179,7 +179,20 @@ class SlpType1 {
     const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
     const bchUtxos = await this.getBchUtxos(feeFunder.address, txFee)
     const bchKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
-    
+
+    if (bchUtxos.cumulativeValue < txFee) {
+      return {
+        success: false,
+        error: `not enough balance in fee funder address (${bchUtxos.cumulativeValue}) to cover the fee (${txFee})`
+      }
+    }
+    if (bchUtxos.utxos.length > 2) {
+      return {
+        success: false,
+        error: 'UTXOs of your fee funder address are thinly spread out which can cause inaccurate fee computation'
+      }
+    }
+
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
