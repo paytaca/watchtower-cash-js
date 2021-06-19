@@ -39,7 +39,7 @@ class BCH {
     return resp
   }
 
-  async send({ sender, recipients, broadcast }) {
+  async send({ sender, recipients, feeFunder, broadcast }) {
     if (broadcast == undefined) {
       broadcast = true
     }
@@ -61,10 +61,11 @@ class BCH {
     if (bchUtxos.cumulativeValue < totalSendAmountSats) {
       return {
         success: false,
-        error: `not enough balance (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
+        error: `not enough balance in sender address (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
       }
     }
-    const bchKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+    
+    const keyPairs = []
 
     let transactionBuilder = new bchjs.TransactionBuilder()
     let outputsCount = 0
@@ -74,9 +75,11 @@ class BCH {
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInput += bchUtxos.utxos[i].value
+      const senderKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+      keyPairs.push(senderKeyPair)
     }
 
-    const inputsCount = bchUtxos.utxos.length
+    let inputsCount = bchUtxos.utxos.length
 
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
@@ -89,6 +92,9 @@ class BCH {
       totalOutput += sendAmount
     }
 
+    if (feeFunder !== undefined) {
+      inputsCount += 1  // Add extra for the fee funder input
+    }
     outputsCount += 1  // Add extra for sending the BCH change,if any
     let byteCount = bchjs.BitcoinCash.getByteCount(
       {
@@ -99,27 +105,81 @@ class BCH {
       }
     )
 
-    const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
-    const remainder = totalInput - (totalOutput + txFee)
+    let feeRate = 1.05 // 1.05 sats/byte fee rate
+    if (feeFunder !== undefined) {
+      feeRate = 1.15
+    }
 
-    // Send the BCH change back to the wallet, if any
-    if (remainder > 0) {
-      transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(sender.address),
-        remainder
-      )
+    const txFee = Math.ceil(byteCount * feeRate)
+    let senderRemainder = 0
+
+    let feeFunderUtxos
+    if (feeFunder !== undefined) {
+      feeFunderUtxos = await this.getBchUtxos(feeFunder.address, txFee)
+      if (feeFunderUtxos.cumulativeValue < txFee) {
+        return {
+          success: false,
+          error: `not enough balance in fee funder address (${feeFunderUtxos.cumulativeValue}) to cover the fee (${txFee})`
+        }
+      }
+      if (feeFunderUtxos.utxos.length > 2) {
+        return {
+          success: false,
+          error: 'UTXOs of your fee funder address are thinly spread out which can cause inaccurate fee computation'
+        }
+      }
+
+      let feeInputContrib = 0
+      for (let i = 0; i < feeFunderUtxos.utxos.length; i++) {
+        transactionBuilder.addInput(feeFunderUtxos.utxos[i].tx_hash, feeFunderUtxos.utxos[i].tx_pos)
+        totalInput += feeFunderUtxos.utxos[i].value
+        feeInputContrib += feeFunderUtxos.utxos[i].value
+        const feeFunderKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+        keyPairs.push(feeFunderKeyPair)
+      }
+
+      // Send BCH change back to sender address, if any
+      senderRemainder = totalInput - feeInputContrib - totalOutput
+      if (senderRemainder > 0) {
+        transactionBuilder.addOutput(
+          bchjs.Address.toLegacyAddress(sender.address),
+          senderRemainder
+        )
+      }
+
+      const feeFunderRemainder = feeInputContrib - txFee
+      if (feeFunderRemainder > 0) {
+        transactionBuilder.addOutput(
+          bchjs.Address.toLegacyAddress(feeFunder.address),
+          feeFunderRemainder
+        )
+      }
+    } else {
+      // Send the BCH change back to the wallet, if any
+      senderRemainder = totalInput - (totalOutput + txFee)
+      if (senderRemainder > 0) {
+        transactionBuilder.addOutput(
+          bchjs.Address.toLegacyAddress(sender.address),
+          senderRemainder
+        )
+      }
+    }
+
+    let combinedUtxos = bchUtxos.utxos
+    if (feeFunder !== undefined) {
+      combinedUtxos = bchUtxos.utxos.concat(feeFunderUtxos.utxos)
     }
 
     // Sign each token UTXO being consumed.
     let redeemScript
-    for (let i = 0; i < bchUtxos.utxos.length; i++) {
-      const thisUtxo = bchUtxos.utxos[i]
+    for (let i = 0; i < keyPairs.length; i++) {
+      const utxo = combinedUtxos[i]
       transactionBuilder.sign(
         i,
-        bchKeyPair,
+        keyPairs[i],
         redeemScript,
         transactionBuilder.hashTypes.SIGHASH_ALL,
-        thisUtxo.value
+        utxo.value
       )
     }
 

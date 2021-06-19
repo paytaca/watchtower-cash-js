@@ -69,7 +69,7 @@ class SlpType1 {
     return resp
   }
 
-  async send({ sender, bchFunder, tokenId, recipients, broadcast }) {
+  async send({ sender, feeFunder, tokenId, recipients, broadcast }) {
     if (broadcast == undefined) {
       broadcast = true
     }
@@ -160,8 +160,8 @@ class SlpType1 {
     )
     byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
     const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
-    const bchUtxos = await this.getBchUtxos(bchFunder.address, txFee)
-    const bchKeyPair = bchjs.ECPair.fromWIF(bchFunder.wif)
+    const bchUtxos = await this.getBchUtxos(feeFunder.address, txFee)
+    const bchKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
     
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
@@ -174,7 +174,7 @@ class SlpType1 {
 
     if (remainderSats > 0) {
       transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(bchFunder.address),
+        bchjs.Address.toLegacyAddress(feeFunder.address),
         remainderSats
       )
     }

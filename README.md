@@ -51,6 +51,10 @@ const data = {
         }
         // <-- You can add more recipients into this array
     ],
+    feeFunder: {  // (Optional) <-- if feeFunder is set, fees will be paid by this address
+        address: 'bitcoincash:qr5ntfv5j7308fsuh08sqxkgp9m87cqqtq3rvgnma9',
+        wif: 'YYY'  // <-- private key of the feeFunder address
+    },
     broadcast: true  // true by default
 }
 
@@ -79,10 +83,6 @@ const data = {
         address: 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x',
         wif: 'XXX'  // <-- private key of the sender address
     },
-    bchFunder: {
-        address: 'bitcoincash:qq46tffgznfew8e78dkyt56k9xcmetnelcma256km7',
-        wif: 'YYY' // <-- private key of the bchFunder address
-    },
     tokenId: '7f8889682d57369ed0e32336f8b7e0ffec625a35cca183f4e81fde4e71a538a1',
     recipients: [
         {
@@ -90,6 +90,10 @@ const data = {
             amount: 101
         } // <-- You can add more recipients into this array
     ],
+    feeFunder: {
+        address: 'bitcoincash:qq46tffgznfew8e78dkyt56k9xcmetnelcma256km7',
+        wif: 'YYY' // <-- private key of the feeFunder address
+    },
     broadcast: true  // true by default
 }
 

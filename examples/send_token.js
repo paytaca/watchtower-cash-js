@@ -7,9 +7,9 @@ const data = {
         address: 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x',
         wif: 'XXX'  // <-- private key of the sender address
     },
-    bchFunder: {
+    feeFunder: {
         address: 'bitcoincash:qq46tffgznfew8e78dkyt56k9xcmetnelcma256km7',
-        wif: 'YYY' // <-- private key of the bchFunder address
+        wif: 'YYY' // <-- private key of the feeFunder address
     },
     tokenId: '7f8889682d57369ed0e32336f8b7e0ffec625a35cca183f4e81fde4e71a538a1',
     recipients: [
