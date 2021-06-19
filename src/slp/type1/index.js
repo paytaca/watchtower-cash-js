@@ -1,6 +1,7 @@
 const axios = require('axios')
 const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
+const BigNumber = require('bignumber.js')
 const OpReturnGenerator = require('./op_returns')
 
 class SlpType1 {
@@ -11,21 +12,33 @@ class SlpType1 {
     })
   }
 
-  async getSlpUtxos(address, tokenId, amount) {
+  async getSlpUtxos(address, tokenId, rawTotalSendAmount) {
     const resp = await this._api.get(`utxo/slp/${address}/${tokenId}`)
-    let cumulativeAmount = 0
+    let cumulativeAmount = new BigNumber(0)
+    let tokenDecimals = 0
     let filteredUtxos = []
     const utxos = resp.data.utxos
+    if (utxos.length > 0) {
+      tokenDecimals = utxos[0].decimals
+    } else {
+      return {
+        cumulativeAmount: cumulativeAmount,
+        utxos: []
+      }
+    }
     for (let i = 0; i < utxos.length; i++) {
       filteredUtxos.push(utxos[i])
-      if (cumulativeAmount >= amount) {
+      const amount = new BigNumber(utxos[i].amount).times(10 ** tokenDecimals)
+      cumulativeAmount = cumulativeAmount.plus(amount)
+      const formattedAmount = new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals)
+      if (cumulativeAmount >= formattedAmount) {
         break
       }
     }
-    cumulativeAmount = 0
+    cumulativeAmount = new BigNumber(0)
     const finalUtxos = filteredUtxos.map(function (item) {
-      const amount = Math.floor(item.amount * (10 ** item.decimals))
-      cumulativeAmount += amount
+      const amount = new BigNumber(item.amount).times(10 ** item.decimals)
+      cumulativeAmount = cumulativeAmount.plus(amount)
       return {
         tokenId: item.tokenid,
         tx_hash: item.txid,
@@ -36,17 +49,19 @@ class SlpType1 {
     })
     return {
       cumulativeAmount: cumulativeAmount,
+      convertedSendAmount: new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals),
+      tokenDecimals: tokenDecimals,
       utxos: finalUtxos
     }
   }
 
   async getBchUtxos (address, value) {
     const resp = await this._api.get(`utxo/bch/${address}`)
-    let cumulativeValue = 0
+    let cumulativeValue = new BigNumber(0)
     let filteredUtxos = []
     const utxos = resp.data.utxos
     for (let i = 0; i < utxos.length; i++) {
-      cumulativeValue += utxos[i].value
+      cumulativeValue = cumulativeValue.plus(utxos[i].value)
       filteredUtxos.push(utxos[i])
       if (cumulativeValue >= value) {
         break
@@ -58,7 +73,7 @@ class SlpType1 {
         return {
           tx_hash: item.txid,
           tx_pos: item.vout,
-          value: Math.floor(item.value)
+          value: new BigNumber(item.value)
         }
       })
     }
@@ -74,13 +89,13 @@ class SlpType1 {
       broadcast = true
     }
 
-    let totalTokenSendAmounts = 0
-    let tokenSendAmounts = recipients.map(function (recipient) {
-      totalTokenSendAmounts += recipient.amount
+    let totalTokenSendAmounts = new BigNumber(0)
+    recipients.map(function (recipient) {
+      totalTokenSendAmounts = totalTokenSendAmounts.plus(recipient.amount)
       return recipient.amount
     })
 
-    const slpUtxos = await this.getSlpUtxos(sender.address, tokenId, tokenSendAmounts)
+    const slpUtxos = await this.getSlpUtxos(sender.address, tokenId, totalTokenSendAmounts)
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
       if (recipient.address.indexOf('simpleledger') < 0) {
@@ -91,10 +106,10 @@ class SlpType1 {
       }
     }
 
-    if (tokenSendAmounts > slpUtxos.cumulativeAmount) {
+    if (slpUtxos.convertedSendAmount > slpUtxos.cumulativeAmount) {
       return {
         success: false,
-        error: `not enough balance (${slpUtxos.cumulativeAmount}) to cover the send amount (${tokenSendAmounts})`
+        error: `not enough balance (${slpUtxos.cumulativeAmount}) to cover the send amount (${slpUtxos.convertedSendAmount})`
       }
     }
 
@@ -103,28 +118,30 @@ class SlpType1 {
 
     let transactionBuilder = new bchjs.TransactionBuilder()
     let outputsCount = 0
-    let totalInputSats = 0
-    let totalOutputSats = 0
+    let totalInputSats = new BigNumber(0)
+    let totalOutputSats = new BigNumber(0)
+    let totalInputTokens = new BigNumber(0)
 
-    let totalInputTokens = 0
+    let sendAmountsArray = recipients.map(function (recipient) {
+      return new BigNumber(recipient.amount).times(10 ** slpUtxos.tokenDecimals)
+    })
 
     for (let i = 0; i < slpUtxos.utxos.length; i++) {
       transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
-      totalInputSats += slpUtxos.utxos[i].value
-      totalInputTokens += slpUtxos.utxos[i].amount
+      totalInputSats = totalInputSats.plus(slpUtxos.utxos[i].value)
+      totalInputTokens = totalInputTokens.plus(slpUtxos.utxos[i].amount)
       keyPairs.push(slpKeyPair)
     }
 
-    let tokenRemainder = totalInputTokens - totalTokenSendAmounts
+    let tokenRemainder = totalInputTokens - slpUtxos.convertedSendAmount
     if (tokenRemainder > 0) {
-      tokenSendAmounts.push(tokenRemainder)
+      sendAmountsArray.push(tokenRemainder)
     }
-
     const slpGen = new OpReturnGenerator()
     const slpSendData = slpGen.generateSendOpReturn(
       {
         tokenId: tokenId,
-        sendAmounts: tokenSendAmounts
+        sendAmounts: sendAmountsArray
       }
     )
     transactionBuilder.addOutput(slpSendData, 0)
@@ -135,7 +152,7 @@ class SlpType1 {
         546
       )
       outputsCount += 1
-      totalOutputSats += 546
+      totalOutputSats = totalOutputSats.plus(546)
     })
 
     if (tokenRemainder > 0) {
@@ -144,7 +161,7 @@ class SlpType1 {
         546
       )
       outputsCount += 1
-      totalOutputSats += 546
+      totalOutputSats = totalOutputSats.plus(546)
     }
 
     const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
@@ -165,17 +182,17 @@ class SlpType1 {
     
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
-      totalInputSats += bchUtxos.utxos[i].value
+      totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
       keyPairs.push(bchKeyPair)
     }
 
     // Last output: send the BCH change back to the wallet.
-    const remainderSats = totalInputSats - (totalOutputSats + txFee)
+    const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
 
     if (remainderSats > 0) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(feeFunder.address),
-        remainderSats
+        parseInt(remainderSats)
       )
     }
 
@@ -184,13 +201,13 @@ class SlpType1 {
     // Sign each token UTXO being consumed.
     let redeemScript
     for (let i = 0; i < combinedUtxos.length; i++) {
-      const thisUtxo = combinedUtxos[i]
+      const utxo = combinedUtxos[i]
       transactionBuilder.sign(
         i,
         keyPairs[i],
         redeemScript,
         transactionBuilder.hashTypes.SIGHASH_ALL,
-        thisUtxo.value
+        parseInt(utxo.value)
       )
     }
 
