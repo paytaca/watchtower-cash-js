@@ -19,7 +19,7 @@ class BCH {
     for (let i = 0; i < utxos.length; i++) {
       cumulativeValue = cumulativeValue.plus(utxos[i].value)
       filteredUtxos.push(utxos[i])
-      if (cumulativeValue >= value) {
+      if (cumulativeValue.isGreaterThanOrEqualTo(value)) {
         break
       }
     }
@@ -132,7 +132,7 @@ class BCH {
 
       // Send BCH change back to sender address, if any
       senderRemainder = totalInput.minus(totalOutput)
-      if (senderRemainder > 0) {
+      if (senderRemainder.isGreaterThan(0)) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(sender.address),
           parseInt(senderRemainder)
@@ -149,7 +149,7 @@ class BCH {
       }
 
       const feeFunderRemainder = feeInputContrib.minus(txFee)
-      if (feeFunderRemainder > 0) {
+      if (feeFunderRemainder.isGreaterThan(0)) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(feeFunder.address),
           parseInt(feeFunderRemainder)
@@ -158,7 +158,7 @@ class BCH {
     } else {
       // Send the BCH change back to the wallet, if any
       senderRemainder = totalInput.minus(totalOutput.plus(txFee))
-      if (senderRemainder > 0) {
+      if (senderRemainder.isGreaterThan(0)) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(sender.address),
           parseInt(senderRemainder)

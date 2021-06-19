@@ -31,7 +31,7 @@ class SlpType1 {
       const amount = new BigNumber(utxos[i].amount).times(10 ** tokenDecimals)
       cumulativeAmount = cumulativeAmount.plus(amount)
       const formattedAmount = new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals)
-      if (cumulativeAmount >= formattedAmount) {
+      if (cumulativeAmount.isGreaterThanOrEqualTo(formattedAmount)) {
         break
       }
     }
@@ -63,7 +63,7 @@ class SlpType1 {
     for (let i = 0; i < utxos.length; i++) {
       cumulativeValue = cumulativeValue.plus(utxos[i].value)
       filteredUtxos.push(utxos[i])
-      if (cumulativeValue >= value) {
+      if (cumulativeValue.isGreaterThanOrEqualTo(value)) {
         break
       }
     }
@@ -85,7 +85,7 @@ class SlpType1 {
   }
 
   async send({ sender, feeFunder, tokenId, recipients, broadcast }) {
-    if (broadcast == undefined) {
+    if (broadcast === undefined) {
       broadcast = true
     }
 
@@ -106,7 +106,7 @@ class SlpType1 {
       }
     }
 
-    if (slpUtxos.convertedSendAmount > slpUtxos.cumulativeAmount) {
+    if (slpUtxos.convertedSendAmount.isGreaterThan(slpUtxos.cumulativeAmount)) {
       return {
         success: false,
         error: `not enough balance (${slpUtxos.cumulativeAmount}) to cover the send amount (${slpUtxos.convertedSendAmount})`
@@ -133,8 +133,8 @@ class SlpType1 {
       keyPairs.push(slpKeyPair)
     }
 
-    let tokenRemainder = totalInputTokens - slpUtxos.convertedSendAmount
-    if (tokenRemainder > 0) {
+    let tokenRemainder = totalInputTokens.minus(slpUtxos.convertedSendAmount)
+    if (tokenRemainder.isGreaterThan(0)) {
       sendAmountsArray.push(tokenRemainder)
     }
     const slpGen = new OpReturnGenerator()
@@ -155,7 +155,7 @@ class SlpType1 {
       totalOutputSats = totalOutputSats.plus(546)
     })
 
-    if (tokenRemainder > 0) {
+    if (tokenRemainder.isGreaterThan(0)) {
       transactionBuilder.addOutput(
         bchjs.SLP.Address.toLegacyAddress(sender.address),
         546
@@ -202,7 +202,7 @@ class SlpType1 {
     // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
 
-    if (remainderSats > 0) {
+    if (remainderSats.isGreaterThan(0)) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(feeFunder.address),
         parseInt(remainderSats)
