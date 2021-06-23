@@ -12,7 +12,17 @@ class Watchtower {
     this.SLP = new SLP(_baseUrl)
   }
 
-  async subscribe ({ address, projectId, walletHash, webhookCallbackUrl }) {
+  _isUUID (uuid) {
+    let s = "" + uuid;
+
+    s = s.match('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (s === null) {
+      return false;
+    }
+    return true;
+  }
+
+  async subscribe ({ address, projectId, walletHash, walletIndex, webhookUrl }) {
     if (projectId === undefined) {
       return {
         success: false,
@@ -20,15 +30,25 @@ class Watchtower {
       }
     }
 
+    if (projectId) {
+      if (!this._isUUID(projectId)) {
+        return {
+          success: false,
+          error: 'invalid_project_id'
+        }
+      }
+    }
+
     let payload = {
       address: address,
-      projectId: projectId
+      project_id: projectId
     }
     if (walletHash) {
       payload['wallet_hash'] = walletHash
+      payload['wallet_index'] = walletIndex
     }
-    if (webhookCallbackUrl) {
-      payload['webhook_url'] = webhookCallbackUrl
+    if (webhookUrl) {
+      payload['webhook_url'] = webhookUrl
     }
 
     const url = _baseUrl + 'subscription/'
