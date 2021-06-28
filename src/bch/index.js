@@ -11,8 +11,13 @@ class BCH {
     })
   }
 
-  async getBchUtxos (address, value) {
-    const resp = await this._api.get(`utxo/bch/${address}`)
+  async getBchUtxos (handle, value) {
+    let resp
+    if (handle.indexOf('wallet:') > -1) {
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}`)
+    } else {
+      resp = await this._api.get(`utxo/bch/${handle}`)
+    }
     let cumulativeValue = new BigNumber(0)
     let filteredUtxos = []
     const utxos = resp.data.utxos
@@ -29,7 +34,8 @@ class BCH {
         return {
           tx_hash: item.txid,
           tx_pos: item.vout,
-          value: new BigNumber(item.value)
+          value: new BigNumber(item.value),
+          wallet_index: item.wallet_index
         }
       })
     }
@@ -40,7 +46,12 @@ class BCH {
     return resp
   }
 
-  async send({ sender, recipients, feeFunder, broadcast }) {
+  async send({ sender, recipients, feeFunder, broadcast, retrieveKeyFunction }) {
+    let walletHash
+    if (typeof sender === 'string') {
+      walletHash = sender
+    }
+
     if (broadcast == undefined) {
       broadcast = true
     }
@@ -58,7 +69,13 @@ class BCH {
     }
 
     const totalSendAmountSats = totalSendAmount * (10 ** 8)
-    const bchUtxos = await this.getBchUtxos(sender.address, totalSendAmountSats)
+    let handle
+    if (walletHash) {
+      handle = 'wallet:' + walletHash
+    } else {
+      handle = sender.address
+    }
+    const bchUtxos = await this.getBchUtxos(handle, totalSendAmountSats)
     if (bchUtxos.cumulativeValue < totalSendAmountSats) {
       return {
         success: false,
@@ -72,12 +89,27 @@ class BCH {
     let outputsCount = 0
     let totalInput = new BigNumber(0)
     let totalOutput = new BigNumber(0)
+
+    // Change address / addresses
+    let mainChangeAddress
     
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInput = totalInput.plus(bchUtxos.utxos[i].value)
-      const senderKeyPair = bchjs.ECPair.fromWIF(sender.wif)
-      keyPairs.push(senderKeyPair)
+      if (walletHash) {
+        const utxoPk = retrieveKeyFunction(bchUtxos.utxos[i].wallet_index)
+        const utxoKeyPair = bchjs.ECPair.fromWIF(utxoPk)
+        keyPairs.push(utxoKeyPair)
+        if (!mainChangeAddress) {
+          mainChangeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)
+        }
+      } else {
+        const senderKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+        keyPairs.push(senderKeyPair)
+        if (!mainChangeAddress) {
+          mainChangeAddress = bchjs.ECPair.toCashAddress(senderKeyPair)
+        }
+      }
     }
 
     let inputsCount = bchUtxos.utxos.length
@@ -134,7 +166,7 @@ class BCH {
       senderRemainder = totalInput.minus(totalOutput)
       if (senderRemainder.isGreaterThan(0)) {
         transactionBuilder.addOutput(
-          bchjs.Address.toLegacyAddress(sender.address),
+          bchjs.Address.toLegacyAddress(mainChangeAddress),
           parseInt(senderRemainder)
         )
       }
@@ -160,7 +192,7 @@ class BCH {
       senderRemainder = totalInput.minus(totalOutput.plus(txFee))
       if (senderRemainder.isGreaterThan(0)) {
         transactionBuilder.addOutput(
-          bchjs.Address.toLegacyAddress(sender.address),
+          bchjs.Address.toLegacyAddress(mainChangeAddress),
           parseInt(senderRemainder)
         )
       }
