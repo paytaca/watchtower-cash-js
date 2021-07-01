@@ -2,13 +2,6 @@ const Watchtower = require('../src')
 
 const watchtower = new Watchtower()
 
-
-function getPrivateKey (walletHash, walletIndex) {
-  // Logic here for retrieveing private key from a wallet
-  // given wallet hash and wallet index
-  return 'XXX'
-}
-
 const data = {
   sender: 'abcd0123456',
   recipients: [
@@ -17,7 +10,10 @@ const data = {
       amount: 0.00001
     }
   ],
-  retrieveKeyFunction: getPrivateKey,
+  wallet: {
+    mnemonic: 'the quick brown fox jumps over the lazy dog',
+    derivationPath: "m/44'/0'/0'"
+  },
   broadcast: true
 }
 

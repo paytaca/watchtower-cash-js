@@ -46,7 +46,14 @@ class BCH {
     return resp
   }
 
-  async send({ sender, recipients, feeFunder, broadcast, retrieveKeyFunction }) {
+  async retrievePrivateKey(mnemonic, derivationPath, walletIndex) {
+    const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
+    const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
+    const childNode = masterHDNode.derivePath(derivationPath + '/' + walletIndex)
+    return bchjs.HDNode.toWIF(childNode)
+  }
+
+  async send({ sender, recipients, feeFunder, broadcast, wallet }) {
     let walletHash
     if (typeof sender === 'string') {
       walletHash = sender
@@ -97,8 +104,12 @@ class BCH {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInput = totalInput.plus(bchUtxos.utxos[i].value)
       if (walletHash) {
-        const utxoPk = retrieveKeyFunction(bchUtxos.utxos[i].wallet_index)
-        const utxoKeyPair = bchjs.ECPair.fromWIF(utxoPk)
+        const utxoPkWif = await this.retrievePrivateKey(
+          wallet.mnemonic,
+          wallet.derivationPath,
+          bchUtxos.utxos[i].wallet_index
+        )
+        const utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
         keyPairs.push(utxoKeyPair)
         if (!mainChangeAddress) {
           mainChangeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)
