@@ -12,8 +12,13 @@ class SlpType1 {
     })
   }
 
-  async getSlpUtxos(address, tokenId, rawTotalSendAmount) {
-    const resp = await this._api.get(`utxo/slp/${address}/${tokenId}`)
+  async getSlpUtxos(handle, tokenId, rawTotalSendAmount) {
+    let resp
+    if (handle.indexOf('wallet:') > -1) {
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}`)
+    } else {
+      resp = await this._api.get(`utxo/slp/${address}/${tokenId}`)
+    }
     let cumulativeAmount = new BigNumber(0)
     let tokenDecimals = 0
     let filteredUtxos = []
@@ -44,7 +49,8 @@ class SlpType1 {
         tx_hash: item.txid,
         tx_pos: item.vout,
         amount: amount,
-        value: 546
+        value: 546,
+        wallet_index: item.wallet_index
       }
     })
     return {
@@ -79,12 +85,23 @@ class SlpType1 {
     }
   }
 
+  async retrievePrivateKey(mnemonic, derivationPath, walletIndex) {
+    const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
+    const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
+    const childNode = masterHDNode.derivePath(derivationPath + '/' + walletIndex)
+    return bchjs.HDNode.toWIF(childNode)
+  }
+
   async broadcastTransaction(txHex) {
     const resp = await this._api.post('broadcast/', { transaction: txHex })
     return resp
   }
 
-  async send({ sender, feeFunder, tokenId, recipients, broadcast }) {
+  async send({ sender, feeFunder, tokenId, recipients, broadcast, wallet }) {
+    let walletHash
+    if (typeof sender === 'string') {
+      walletHash = sender
+    }
     if (broadcast === undefined) {
       broadcast = true
     }
@@ -95,7 +112,13 @@ class SlpType1 {
       return recipient.amount
     })
 
-    const slpUtxos = await this.getSlpUtxos(sender.address, tokenId, totalTokenSendAmounts)
+    let handle
+    if (walletHash) {
+      handle = 'wallet:' + walletHash
+    } else {
+      handle = sender.address
+    }
+    const slpUtxos = await this.getSlpUtxos(handle, tokenId, totalTokenSendAmounts)
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
       if (recipient.address.indexOf('simpleledger') < 0) {
@@ -113,7 +136,6 @@ class SlpType1 {
       }
     }
 
-    const slpKeyPair = bchjs.ECPair.fromWIF(sender.wif)
     const keyPairs = []
 
     let transactionBuilder = new bchjs.TransactionBuilder()
@@ -126,11 +148,28 @@ class SlpType1 {
       return new BigNumber(recipient.amount).times(10 ** slpUtxos.tokenDecimals)
     })
 
+    // Change address / addresses
+    let mainChangeAddress
+
     for (let i = 0; i < slpUtxos.utxos.length; i++) {
       transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(slpUtxos.utxos[i].value)
       totalInputTokens = totalInputTokens.plus(slpUtxos.utxos[i].amount)
-      keyPairs.push(slpKeyPair)
+      let utxoKeyPair
+      if (walletHash) {
+        const utxoPkWif = await this.retrievePrivateKey(
+          wallet.mnemonic,
+          wallet.derivationPath,
+          slpUtxos.utxos[i].wallet_index
+        )
+        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+      } else {
+        utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+      }
+      keyPairs.push(utxoKeyPair)
+      if (!mainChangeAddress) {
+        mainChangeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)
+      }
     }
 
     let tokenRemainder = totalInputTokens.minus(slpUtxos.convertedSendAmount)
@@ -157,7 +196,7 @@ class SlpType1 {
 
     if (tokenRemainder.isGreaterThan(0)) {
       transactionBuilder.addOutput(
-        bchjs.SLP.Address.toLegacyAddress(sender.address),
+        bchjs.Address.toLegacyAddress(mainChangeAddress),
         546
       )
       outputsCount += 1

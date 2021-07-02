@@ -75,7 +75,7 @@ class BCH {
       totalSendAmount += recipient.amount
     }
 
-    const totalSendAmountSats = totalSendAmount * (10 ** 8)
+    const totalSendAmountSats = parseInt(totalSendAmount * (10 ** 8))
     let handle
     if (walletHash) {
       handle = 'wallet:' + walletHash
