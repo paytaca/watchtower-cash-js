@@ -7,8 +7,12 @@ class Wallet {
     })
   }
 
+  async getTokens () {
+    const assets = await this._api.get(`tokens/wallet/${walletHash}/`)
+    return assets.data
+  }
+
   async getBalance ({ walletHash, tokenId }) {
-    console.log('Checking balance...', `balance/wallet/${walletHash}/${tokenId}/`)
     let balance
     if (tokenId) {
       balance = await this._api.get(`balance/wallet/${walletHash}/${tokenId}/`)

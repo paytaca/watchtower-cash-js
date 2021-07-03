@@ -17,7 +17,7 @@ class SlpType1 {
     if (handle.indexOf('wallet:') > -1) {
       resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/`)
     } else {
-      resp = await this._api.get(`utxo/slp/${address}/${tokenId}/`)
+      resp = await this._api.get(`utxo/slp/${handle}/${tokenId}/`)
     }
     let cumulativeAmount = new BigNumber(0)
     let tokenDecimals = 0
@@ -119,6 +119,7 @@ class SlpType1 {
       handle = sender.address
     }
     const slpUtxos = await this.getSlpUtxos(handle, tokenId, totalTokenSendAmounts)
+    console.log(slpUtxos)
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
       if (recipient.address.indexOf('simpleledger') < 0) {
@@ -215,8 +216,10 @@ class SlpType1 {
       }
     )
     byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
-    const txFee = Math.ceil(byteCount * 1.05)  // 1.05 sats/byte fee rate
+    const txFee = Math.ceil(byteCount * 1.3)  // 1.3 sats/byte fee rate to account for inaccuracies
+    console.log(txFee)
     const bchUtxos = await this.getBchUtxos(feeFunder.address, txFee)
+    console.log(bchUtxos)
     const bchKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
 
     if (bchUtxos.cumulativeValue < txFee) {
