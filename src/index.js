@@ -1,5 +1,6 @@
 const BCH = require('./bch')
 const SLP = require('./slp')
+const Wallet = require('./wallet')
 const axios = require('axios')
 
 
@@ -10,6 +11,7 @@ class Watchtower {
   constructor () {
     this.BCH = new BCH(_baseUrl)
     this.SLP = new SLP(_baseUrl)
+    this.Wallet = new Wallet(_baseUrl)
   }
 
   _isUUID (uuid) {

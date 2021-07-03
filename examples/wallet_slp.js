@@ -4,8 +4,6 @@ const BCHJS = require('@psf/bch-js')
 
 const bchjs = new BCHJS()
 
-const watchtower = new Watchtower()
-
 function getWalletHash (mnemonic, derivationPath) {
   const mnemonicHash = sha256(mnemonic)
   const pathHash = sha256(derivationPath)
@@ -38,7 +36,10 @@ async function execute () {
   console.log('Wallet hash:', walletHash)
   console.log('Address:', address)
 
+  // Initialize watchtower
   const watchtower = new Watchtower()
+
+  // Subscribe
   const subscribeData = {
       address: address,
       projectId: projectId,
@@ -49,7 +50,19 @@ async function execute () {
     console.log(result)
   })
 
+  const tokenId = '7f8889682d57369ed0e32336f8b7e0ffec625a35cca183f4e81fde4e71a538a1'
 
+  // Get balance
+  watchtower.Wallet.getBalance({ walletHash, tokenId }).then(function (balance) {
+    console.log(balance)
+  })
+
+  // Get history
+  watchtower.Wallet.getHistory({ walletHash }).then(function (history) {
+    console.log(history)
+  })
+
+  // Send
   const data = {
       sender: walletHash,
       recipients: [
@@ -58,7 +71,7 @@ async function execute () {
           amount: 101
         }
       ],
-      tokenId: '7f8889682d57369ed0e32336f8b7e0ffec625a35cca183f4e81fde4e71a538a1',
+      tokenId: tokenId,
       feeFunder: {  // Replace with real BCH address and its private key in WIF format
         address: 'bitcoincash:qp6ls99pxdfsvue4jqhla0esjjm7h685xu5q03v058',
         wif: 'XXX' 

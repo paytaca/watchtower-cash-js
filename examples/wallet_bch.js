@@ -36,7 +36,10 @@ async function execute () {
   console.log('Wallet hash:', walletHash)
   console.log('Address:', address)
 
+  // Initialize watchtower
   const watchtower = new Watchtower()
+
+  // Subscribe
   const subscribeData = {
       address: address,
       projectId: projectId,
@@ -47,6 +50,17 @@ async function execute () {
     console.log(result)
   })
 
+  // Get balance
+  watchtower.Wallet.getBalance({ walletHash }).then(function (balance) {
+    console.log(balance)
+  })
+
+  // Get history
+  watchtower.Wallet.getHistory({ walletHash }).then(function (history) {
+    console.log(history)
+  })
+
+  // Send
   const data = {
       sender: walletHash,
       recipients: [

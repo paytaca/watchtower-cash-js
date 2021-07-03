@@ -15,9 +15,9 @@ class SlpType1 {
   async getSlpUtxos(handle, tokenId, rawTotalSendAmount) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/`)
     } else {
-      resp = await this._api.get(`utxo/slp/${address}/${tokenId}`)
+      resp = await this._api.get(`utxo/slp/${address}/${tokenId}/`)
     }
     let cumulativeAmount = new BigNumber(0)
     let tokenDecimals = 0
@@ -62,7 +62,7 @@ class SlpType1 {
   }
 
   async getBchUtxos (address, value) {
-    const resp = await this._api.get(`utxo/bch/${address}`)
+    const resp = await this._api.get(`utxo/bch/${address}/`)
     let cumulativeValue = new BigNumber(0)
     let filteredUtxos = []
     const utxos = resp.data.utxos

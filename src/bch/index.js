@@ -14,9 +14,9 @@ class BCH {
   async getBchUtxos (handle, value) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/`)
     } else {
-      resp = await this._api.get(`utxo/bch/${handle}`)
+      resp = await this._api.get(`utxo/bch/${handle}/`)
     }
     let cumulativeValue = new BigNumber(0)
     let filteredUtxos = []
@@ -245,7 +245,6 @@ class BCH {
     }
 
   }
-
 }
 
 module.exports = BCH
