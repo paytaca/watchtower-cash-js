@@ -7,7 +7,7 @@ class Wallet {
     })
   }
 
-  async getTokens () {
+  async getTokens ({ walletHash }) {
     const assets = await this._api.get(`tokens/wallet/${walletHash}/`)
     return assets.data
   }
