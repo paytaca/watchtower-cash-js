@@ -65,9 +65,9 @@ async function execute () {
   // Send
   const data = {
     sender: {
-      walletHash: '',
-      mnemonic: '',
-      derivationPath: ''
+      walletHash: walletHash,
+      mnemonic: mnemonic,
+      derivationPath: derivationPath
     },
     recipients: [
       {

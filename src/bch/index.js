@@ -54,10 +54,10 @@ class BCH {
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async send({ sender, recipients, feeFunder, broadcast, wallet }) {
+  async send({ sender, recipients, feeFunder, changeAddress, broadcast }) {
     let walletHash
-    if (typeof sender === 'string') {
-      walletHash = sender
+    if (sender.walletHash !== undefined) {
+      walletHash = sender.walletHash
     }
 
     if (broadcast == undefined) {
@@ -97,29 +97,26 @@ class BCH {
     let outputsCount = 0
     let totalInput = new BigNumber(0)
     let totalOutput = new BigNumber(0)
-
-    // Change address / addresses
-    let mainChangeAddress
     
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInput = totalInput.plus(bchUtxos.utxos[i].value)
       if (walletHash) {
         const utxoPkWif = await this.retrievePrivateKey(
-          wallet.mnemonic,
-          wallet.derivationPath,
+          sender.mnemonic,
+          sender.derivationPath,
           bchUtxos.utxos[i].wallet_index
         )
         const utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
         keyPairs.push(utxoKeyPair)
-        if (!mainChangeAddress) {
-          mainChangeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)
+        if (!changeAddress) {
+          changeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)
         }
       } else {
         const senderKeyPair = bchjs.ECPair.fromWIF(sender.wif)
         keyPairs.push(senderKeyPair)
-        if (!mainChangeAddress) {
-          mainChangeAddress = bchjs.ECPair.toCashAddress(senderKeyPair)
+        if (!changeAddress) {
+          changeAddress = bchjs.ECPair.toCashAddress(senderKeyPair)
         }
       }
     }

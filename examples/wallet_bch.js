@@ -62,25 +62,26 @@ async function execute () {
 
   // Send
   const data = {
-      sender: walletHash,
-      recipients: [
-        {
-          address: 'bitcoincash:qpj6d5d6rk4da08pad8lx4swrxlejerfy5v68hz3dj',
-          amount: 0.00001
-        }
-      ],
-      wallet: {
-        mnemonic: mnemonic,
-        derivationPath: derivationPath
-      },
-      broadcast: false
-    }
-    
-    console.log(data)
-    
-    watchtower.BCH.send(data).then(function (result) {
-      console.log(result)
-    })
+    sender: {
+      walletHash: walletHash,
+      mnemonic: mnemonic,
+      derivationPath: derivationPath
+    },
+    recipients: [
+      {
+        address: 'bitcoincash:qpj6d5d6rk4da08pad8lx4swrxlejerfy5v68hz3dj',
+        amount: 0.00001
+      }
+    ],
+    changeAddress: '',
+    broadcast: false
+  }
+  
+  console.log(data)
+  
+  watchtower.BCH.send(data).then(function (result) {
+    console.log(result)
+  })
 
 }
 

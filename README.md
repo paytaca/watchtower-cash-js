@@ -52,10 +52,14 @@ const data = {
         }
         // <-- You can add more recipients into this array
     ],
-    feeFunder: {  // (Optional) <-- if feeFunder is set, fees will be paid by this address
+    // (Optional) <-- if feeFunder is set, fees will be paid by this address
+    feeFunder: {
         address: 'bitcoincash:qr5ntfv5j7308fsuh08sqxkgp9m87cqqtq3rvgnma9',
         wif: 'YYY'  // <-- private key of the feeFunder address
     },
+    // (Optional) <-- set a custom change address
+    changeAddress: 'bitcoincash:qzrhqu0jqslzt9kppw8gtwlkhqwnfrn2dc63yv2saj'
+    // (Optional) <-- Broadcast or just return raw transaction hex
     broadcast: true  // true by default
 }
 
@@ -91,10 +95,17 @@ const data = {
             amount: 101
         } // <-- You can add more recipients into this array
     ],
+    // (Optional) <-- if feeFunder is set, fees will be paid by this address
     feeFunder: {
         address: 'bitcoincash:qq46tffgznfew8e78dkyt56k9xcmetnelcma256km7',
         wif: 'YYY' // <-- private key of the feeFunder address
     },
+    // (Optional) <-- set a custom change addresses
+    changeAddresses: {
+        slp: 'simpleledger:qzn4k4lm22rlzlyjccz4r29mz0wpuf9gz5zj2l9w6y',
+        bch: 'bitcoincash:qp46gzcw0ycxtnngrhp0xddp2qxnyjnepg2qc02eeh'
+    }
+    // (Optional) <-- Broadcast or just return raw transaction hex
     broadcast: true  // true by default
 }
 
