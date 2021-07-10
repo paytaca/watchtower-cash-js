@@ -64,30 +64,35 @@ async function execute () {
 
   // Send
   const data = {
-      sender: walletHash,
-      recipients: [
-        {
-          address: 'simpleledger:qpj6d5d6rk4da08pad8lx4swrxlejerfy5qpvvh3nv',
-          amount: 101
-        }
-      ],
-      tokenId: tokenId,
-      feeFunder: {  // Replace with real BCH address and its private key in WIF format
-        address: 'bitcoincash:qp6ls99pxdfsvue4jqhla0esjjm7h685xu5q03v058',
-        wif: 'XXX' 
-      },
-      wallet: {
-        mnemonic: mnemonic,
-        derivationPath: derivationPath
-      },
-      broadcast: true
-    }
-    
-    console.log(data)
-    
-    watchtower.SLP.Type1.send(data).then(function (result) {
-      console.log(result)
-    })
+    sender: {
+      walletHash: '',
+      mnemonic: '',
+      derivationPath: ''
+    },
+    recipients: [
+      {
+        address: 'simpleledger:qpj6d5d6rk4da08pad8lx4swrxlejerfy5qpvvh3nv',
+        amount: 101
+      }
+    ],
+    tokenId: tokenId,
+    feeFunder: {
+      walletHash: '',
+      mnemonic: '',
+      derivationPath: ''
+    },
+    changeAddresses: {
+      slp: '',
+      bch: ''
+    },
+    broadcast: true
+  }
+
+  console.log(data)
+
+  watchtower.SLP.Type1.send(data).then(function (result) {
+    console.log(result)
+  })
 
 }
 

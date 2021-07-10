@@ -98,13 +98,19 @@ class SlpType1 {
     return resp
   }
 
-  async send({ sender, feeFunder, tokenId, recipients, broadcast, wallet }) {
+  async send({ sender, feeFunder, tokenId, recipients, changeAddresses, broadcast }) {
     let walletHash
-    if (typeof sender === 'string') {
-      walletHash = sender
+    if (sender.walletHash !== undefined) {
+      walletHash = sender.walletHash
     }
     if (broadcast === undefined) {
       broadcast = true
+    }
+    if (!changeAddresses) {
+      changeAddresses = {
+        slp: null,
+        bch: null
+      }
     }
 
     let totalTokenSendAmounts = new BigNumber(0)
@@ -150,9 +156,6 @@ class SlpType1 {
       return new BigNumber(recipient.amount).times(10 ** slpUtxos.tokenDecimals)
     })
 
-    // Change address / addresses
-    let mainChangeAddress
-
     for (let i = 0; i < slpUtxos.utxos.length; i++) {
       transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(slpUtxos.utxos[i].value)
@@ -160,8 +163,8 @@ class SlpType1 {
       let utxoKeyPair
       if (walletHash) {
         const utxoPkWif = await this.retrievePrivateKey(
-          wallet.mnemonic,
-          wallet.derivationPath,
+          sender.mnemonic,
+          sender.derivationPath,
           slpUtxos.utxos[i].wallet_index
         )
         utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
@@ -169,8 +172,8 @@ class SlpType1 {
         utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
       }
       keyPairs.push(utxoKeyPair)
-      if (!mainChangeAddress) {
-        mainChangeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)
+      if (!changeAddresses.slp) {
+        changeAddresses.slp = bchjs.ECPair.toCashAddress(utxoKeyPair)
       }
     }
 
@@ -198,7 +201,7 @@ class SlpType1 {
 
     if (tokenRemainder.isGreaterThan(0)) {
       transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(mainChangeAddress),
+        bchjs.Address.toLegacyAddress(changeAddresses.slp),
         this.dustLimit
       )
       outputsCount += 1
@@ -219,27 +222,46 @@ class SlpType1 {
     byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
     const txFee = Math.ceil(byteCount * 1.3)  // 1.3 sats/byte fee rate to account for inaccuracies
     console.log(txFee)
-    const bchUtxos = await this.getBchUtxos(feeFunder.address, txFee)
-    console.log(bchUtxos)
-    const bchKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+    let feeFunderHandle
+    if (feeFunder.walletHash) {
+      feeFunderHandle = feeFunder.walletHash
+    } else {
+      feeFunderHandle = feeFunder.address
+    }
+    const bchUtxos = await this.getBchUtxos(feeFunderHandle, txFee)
 
     if (bchUtxos.cumulativeValue < txFee) {
       return {
         success: false,
-        error: `not enough balance in fee funder address (${bchUtxos.cumulativeValue}) to cover the fee (${txFee})`
+        error: `not enough balance in fee funder (${bchUtxos.cumulativeValue}) to cover the fee (${txFee})`
       }
     }
     if (bchUtxos.utxos.length > 2) {
       return {
         success: false,
-        error: 'UTXOs of your fee funder address are thinly spread out which can cause inaccurate fee computation'
+        error: 'UTXOs of the fee funder are thinly spread out which can cause inaccurate fee computation'
       }
     }
 
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
-      keyPairs.push(bchKeyPair)
+      // keyPairs.push(bchKeyPair)
+      let feeFunderutxoKeyPair
+      if (feeFunder.walletHash) {
+        const utxoPkWif = await this.retrievePrivateKey(
+          feeFunder.mnemonic,
+          feeFunder.derivationPath,
+          bchUtxos.utxos[i].wallet_index
+        )
+        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+      } else {
+        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+      }
+      keyPairs.push(feeFunderutxoKeyPair)
+      if (!changeAddresses.bch) {
+        changeAddresses.bch = bchjs.ECPair.toCashAddress(feeFunderutxoKeyPair)
+      }
     }
 
     // Last output: send the BCH change back to the wallet.
@@ -247,7 +269,7 @@ class SlpType1 {
 
     if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
       transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(feeFunder.address),
+        bchjs.Address.toLegacyAddress(changeAddresses.bch),
         parseInt(remainderSats)
       )
     }
