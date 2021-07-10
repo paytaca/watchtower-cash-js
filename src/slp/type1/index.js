@@ -8,7 +8,8 @@ class SlpType1 {
 
   constructor (apiBaseUrl) {
     this._api = axios.create({
-      baseURL: apiBaseUrl
+      baseURL: apiBaseUrl,
+      timeout: 60 * 1000  // 1 minute
     })
     this.dustLimit = 546
   }
@@ -42,6 +43,7 @@ class SlpType1 {
       }
     }
     cumulativeAmount = new BigNumber(0)
+    const dustLimit = this.dustLimit
     const finalUtxos = filteredUtxos.map(function (item) {
       const amount = new BigNumber(item.amount).times(10 ** item.decimals)
       cumulativeAmount = cumulativeAmount.plus(amount)
@@ -50,7 +52,7 @@ class SlpType1 {
         tx_hash: item.txid,
         tx_pos: item.vout,
         amount: amount,
-        value: this.dustLimit,
+        value: dustLimit,
         wallet_index: item.wallet_index
       }
     })
@@ -62,8 +64,13 @@ class SlpType1 {
     }
   }
 
-  async getBchUtxos (address, value) {
-    const resp = await this._api.get(`utxo/bch/${address}/`)
+  async getBchUtxos (handle, value) {
+    let resp
+    if (handle.indexOf('wallet:') > -1) {
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/`)
+    } else {
+      resp = await this._api.get(`utxo/bch/${handle}/`)
+    }
     let cumulativeValue = new BigNumber(0)
     let filteredUtxos = []
     const utxos = resp.data.utxos
@@ -80,7 +87,8 @@ class SlpType1 {
         return {
           tx_hash: item.txid,
           tx_pos: item.vout,
-          value: new BigNumber(item.value)
+          value: new BigNumber(item.value),
+          wallet_index: item.wallet_index
         }
       })
     }
@@ -126,7 +134,6 @@ class SlpType1 {
       handle = sender.address
     }
     const slpUtxos = await this.getSlpUtxos(handle, tokenId, totalTokenSendAmounts)
-    console.log(slpUtxos)
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
       if (recipient.address.indexOf('simpleledger') < 0) {
@@ -137,10 +144,17 @@ class SlpType1 {
       }
     }
 
-    if (slpUtxos.convertedSendAmount.isGreaterThan(slpUtxos.cumulativeAmount)) {
+    try {
+      if (slpUtxos.convertedSendAmount.isGreaterThan(slpUtxos.cumulativeAmount)) {
+        return {
+          success: false,
+          error: `not enough balance (${slpUtxos.cumulativeAmount}) to cover the send amount (${slpUtxos.convertedSendAmount})`
+        }
+      }
+    } catch (err) {
       return {
         success: false,
-        error: `not enough balance (${slpUtxos.cumulativeAmount}) to cover the send amount (${slpUtxos.convertedSendAmount})`
+        error: 'not enough balance to cover the send amount'
       }
     }
 
@@ -189,23 +203,24 @@ class SlpType1 {
       }
     )
     transactionBuilder.addOutput(slpSendData, 0)
-
+    
+    const dustLimit = this.dustLimit
     recipients.map(function (recipient) {
       transactionBuilder.addOutput(
         bchjs.SLP.Address.toLegacyAddress(recipient.address),
-        this.dustLimit
+        dustLimit
       )
       outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(this.dustLimit)
+      totalOutputSats = totalOutputSats.plus(dustLimit)
     })
 
     if (tokenRemainder.isGreaterThan(0)) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(changeAddresses.slp),
-        this.dustLimit
+        dustLimit
       )
       outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(this.dustLimit)
+      totalOutputSats = totalOutputSats.plus(dustLimit)
     }
 
     const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
@@ -221,10 +236,9 @@ class SlpType1 {
     )
     byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
     const txFee = Math.ceil(byteCount * 1.3)  // 1.3 sats/byte fee rate to account for inaccuracies
-    console.log(txFee)
     let feeFunderHandle
     if (feeFunder.walletHash) {
-      feeFunderHandle = feeFunder.walletHash
+      feeFunderHandle = 'wallet:' + feeFunder.walletHash
     } else {
       feeFunderHandle = feeFunder.address
     }
@@ -267,7 +281,7 @@ class SlpType1 {
     // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
 
-    if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
+    if (remainderSats.isGreaterThanOrEqualTo(dustLimit)) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(changeAddresses.bch),
         parseInt(remainderSats)

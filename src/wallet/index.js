@@ -3,7 +3,8 @@ const axios = require('axios')
 class Wallet {
   constructor (apiBaseUrl) {
     this._api = axios.create({
-      baseURL: apiBaseUrl
+      baseURL: apiBaseUrl,
+      timeout: 60 * 1000  // 1 minute
     })
   }
 

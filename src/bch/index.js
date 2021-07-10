@@ -7,7 +7,8 @@ class BCH {
 
   constructor (apiBaseUrl) {
     this._api = axios.create({
-      baseURL: apiBaseUrl
+      baseURL: apiBaseUrl,
+      timeout: 60 * 1000  // 1 minute
     })
     this.dustLimit = 546
   }
@@ -175,7 +176,7 @@ class BCH {
       senderRemainder = totalInput.minus(totalOutput)
       if (senderRemainder.isGreaterThanOrEqualTo(this.dustLimit)) {
         transactionBuilder.addOutput(
-          bchjs.Address.toLegacyAddress(mainChangeAddress),
+          bchjs.Address.toLegacyAddress(changeAddress),
           parseInt(senderRemainder)
         )
       }
@@ -201,7 +202,7 @@ class BCH {
       senderRemainder = totalInput.minus(totalOutput.plus(txFee))
       if (senderRemainder.isGreaterThan(0)) {
         transactionBuilder.addOutput(
-          bchjs.Address.toLegacyAddress(mainChangeAddress),
+          bchjs.Address.toLegacyAddress(changeAddress),
           parseInt(senderRemainder)
         )
       }
