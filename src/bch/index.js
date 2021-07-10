@@ -9,6 +9,7 @@ class BCH {
     this._api = axios.create({
       baseURL: apiBaseUrl
     })
+    this.dustLimit = 546
   }
 
   async getBchUtxos (handle, value) {
@@ -175,7 +176,7 @@ class BCH {
 
       // Send BCH change back to sender address, if any
       senderRemainder = totalInput.minus(totalOutput)
-      if (senderRemainder.isGreaterThan(0)) {
+      if (senderRemainder.isGreaterThanOrEqualTo(this.dustLimit)) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(mainChangeAddress),
           parseInt(senderRemainder)

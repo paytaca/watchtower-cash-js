@@ -1,6 +1,4 @@
 const slpMdm = require('slp-mdm')
-const BigNumber = require('bignumber.js')
-
 
 class OpReturnGenerator {
 
@@ -10,7 +8,7 @@ class OpReturnGenerator {
     try {
       
       let amounts = sendAmounts.map(function (amount) {
-        return new BigNumber(amount)
+        return new slpMdm.BN(amount)
       })
 
       const script = slpMdm.TokenType1.send(tokenId, amounts)

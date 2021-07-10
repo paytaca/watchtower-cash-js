@@ -3,13 +3,14 @@ const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
 const OpReturnGenerator = require('./op_returns')
-
+ 
 class SlpType1 {
 
   constructor (apiBaseUrl) {
     this._api = axios.create({
       baseURL: apiBaseUrl
     })
+    this.dustLimit = 546
   }
 
   async getSlpUtxos(handle, tokenId, rawTotalSendAmount) {
@@ -49,7 +50,7 @@ class SlpType1 {
         tx_hash: item.txid,
         tx_pos: item.vout,
         amount: amount,
-        value: 546,
+        value: this.dustLimit,
         wallet_index: item.wallet_index
       }
     })
@@ -189,19 +190,19 @@ class SlpType1 {
     recipients.map(function (recipient) {
       transactionBuilder.addOutput(
         bchjs.SLP.Address.toLegacyAddress(recipient.address),
-        546
+        this.dustLimit
       )
       outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(546)
+      totalOutputSats = totalOutputSats.plus(this.dustLimit)
     })
 
     if (tokenRemainder.isGreaterThan(0)) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(mainChangeAddress),
-        546
+        this.dustLimit
       )
       outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(546)
+      totalOutputSats = totalOutputSats.plus(this.dustLimit)
     }
 
     const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
@@ -244,7 +245,7 @@ class SlpType1 {
     // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
 
-    if (remainderSats.isGreaterThan(0)) {
+    if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(feeFunder.address),
         parseInt(remainderSats)
