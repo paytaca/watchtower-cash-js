@@ -148,13 +148,13 @@ class SlpType1 {
       if (slpUtxos.convertedSendAmount.isGreaterThan(slpUtxos.cumulativeAmount)) {
         return {
           success: false,
-          error: `not enough balance (${slpUtxos.cumulativeAmount}) to cover the send amount (${slpUtxos.convertedSendAmount})`
+          error: `not enough balance in sender (${slpUtxos.cumulativeAmount}) to cover the send amount (${slpUtxos.convertedSendAmount})`
         }
       }
     } catch (err) {
       return {
         success: false,
-        error: 'not enough balance to cover the send amount'
+        error: 'not enough balance in sender to cover the send amount'
       }
     }
 

@@ -88,7 +88,7 @@ class BCH {
     if (bchUtxos.cumulativeValue < totalSendAmountSats) {
       return {
         success: false,
-        error: `not enough balance in sender address (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
+        error: `not enough balance in sender (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
       }
     }
     
@@ -162,13 +162,13 @@ class BCH {
       if (feeFunderUtxos.cumulativeValue < txFee) {
         return {
           success: false,
-          error: `not enough balance in fee funder address (${feeFunderUtxos.cumulativeValue}) to cover the fee (${txFee})`
+          error: `not enough balance in fee funder (${feeFunderUtxos.cumulativeValue}) to cover the fee (${txFee})`
         }
       }
       if (feeFunderUtxos.utxos.length > 2) {
         return {
           success: false,
-          error: 'UTXOs of your fee funder address are thinly spread out which can cause inaccurate fee computation'
+          error: 'UTXOs of your fee funder are thinly spread out which can cause inaccurate fee computation'
         }
       }
 
