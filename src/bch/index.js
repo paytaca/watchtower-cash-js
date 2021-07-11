@@ -148,10 +148,7 @@ class BCH {
       }
     )
 
-    let feeRate = 1.05 // 1.05 sats/byte fee rate
-    if (feeFunder !== undefined) {
-      feeRate = 1.15
-    }
+    const feeRate = 1.1 // 1.1 sats/byte fee rate
 
     const txFee = Math.ceil(byteCount * feeRate)
     let senderRemainder = 0

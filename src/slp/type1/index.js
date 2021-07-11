@@ -235,7 +235,8 @@ class SlpType1 {
       }
     )
     byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
-    const txFee = Math.ceil(byteCount * 1.3)  // 1.3 sats/byte fee rate to account for inaccuracies
+    const feeRate = 1.2 // 1.2 sats/byte fee rate
+    const txFee = Math.ceil(byteCount * feeRate)
     let feeFunderHandle
     if (feeFunder.walletHash) {
       feeFunderHandle = 'wallet:' + feeFunder.walletHash
@@ -260,7 +261,6 @@ class SlpType1 {
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
-      // keyPairs.push(bchKeyPair)
       let feeFunderutxoKeyPair
       if (feeFunder.walletHash) {
         const utxoPkWif = await this.retrievePrivateKey(
