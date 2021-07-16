@@ -188,7 +188,7 @@ class BCH {
       }
 
       const feeFunderRemainder = feeInputContrib.minus(txFee)
-      if (feeFunderRemainder.isGreaterThan(0)) {
+      if (feeFunderRemainder.isGreaterThan(this.dustLimit)) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(feeFunder.address),
           parseInt(feeFunderRemainder)
@@ -197,7 +197,7 @@ class BCH {
     } else {
       // Send the BCH change back to the wallet, if any
       senderRemainder = totalInput.minus(totalOutput.plus(txFee))
-      if (senderRemainder.isGreaterThan(0)) {
+      if (senderRemainder.isGreaterThan(this.dustLimit)) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(changeAddress),
           parseInt(senderRemainder)
