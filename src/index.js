@@ -47,16 +47,19 @@ class Watchtower {
     }
     if (walletHash) {
       payload['wallet_hash'] = walletHash
-      payload['addresses'] = addresses
-      if (walletIndex) {
+      if (addresses) {
+        payload['addresses'] = addresses
+      }
+      if (walletIndex !== undefined) {
         payload['wallet_index'] = walletIndex
       }
-      payload['address_index'] = addressIndex
+      if (addressIndex !== undefined) {
+        payload['address_index'] = addressIndex
+      }
     }
     if (webhookUrl) {
       payload['webhook_url'] = webhookUrl
     }
-
     const url = _baseUrl + 'subscription/'
     try {
       const resp = await axios.post(url, payload)

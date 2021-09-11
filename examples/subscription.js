@@ -3,10 +3,12 @@ const Watchtower = require('../src')
 const watchtower = new Watchtower()
 
 const data = {
-    address: 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x',
     projectId: '0000-0000-0000',  // <-- Generate this ID by creating a project at Watchtower.cash
+    addresses: {
+        receiving: 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x'
+    },
     walletHash: 'abcd0123456', // <-- (Optional) You generate this to track which HD wallet the address belongs to
-    walletIndex: 0, // <-- (Optional) The index used to generate this address from HD wallet
+    addressIndex: 0, // <-- (Optional) The index used to generate this address from HD wallet
     webhookUrl: 'https://xxx.com/webhook-call-receiver'  // <-- (Optional) Your webhook receiver URL
 }
 

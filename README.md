@@ -16,10 +16,13 @@ const watchtower = new Watchtower()
 
 // Subscribe function accepts either BCH or SLP address
 const data = {
-    address: 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x',
     projectId: '0000-0000-0000',  // <-- Generate this ID by creating a project at Watchtower.cash
+    addresses: {
+        receiving: 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x',
+        change: '' // <-- (Optional) If you want to subscribe a change address along with the receiving one
+    },
     walletHash: 'abcd0123456', // <-- (Optional) You generate this to track which HD wallet the address belongs to
-    walletIndex: 0, // <-- (Optional) The index used to generate this address from HD wallet
+    addressIndex: 0, // <-- (Optional) The index used to generate this address from HD wallet
     webhookUrl: 'https://xxx.com/webhook-call-receiver'  // <-- (Optional) Your webhook receiver URL
 }
 
