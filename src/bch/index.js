@@ -48,10 +48,10 @@ class BCH {
     return resp
   }
 
-  async retrievePrivateKey(mnemonic, derivationPath, walletIndex) {
+  async retrievePrivateKey(mnemonic, derivationPath, addressPath) {
     const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
     const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
-    const childNode = masterHDNode.derivePath(derivationPath + '/' + walletIndex)
+    const childNode = masterHDNode.derivePath(derivationPath + '/' + addressPath)
     return bchjs.HDNode.toWIF(childNode)
   }
 
@@ -103,12 +103,18 @@ class BCH {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInput = totalInput.plus(bchUtxos.utxos[i].value)
       if (walletHash) {
+        let addressPath
+        if (bchUtxos.utxos[i].address_path) {
+          addressPath = bchUtxos.utxos[i].address_path
+        } else {
+          addressPath = bchUtxos.utxos[i].wallet_index
+        }
         const utxoPkWif = await this.retrievePrivateKey(
           sender.mnemonic,
           sender.derivationPath,
-          bchUtxos.utxos[i].wallet_index
+          addressPath
         )
-        const utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
         keyPairs.push(utxoKeyPair)
         if (!changeAddress) {
           changeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)

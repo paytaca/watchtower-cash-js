@@ -95,10 +95,10 @@ class SlpNft1Child {
     }
   }
 
-  async retrievePrivateKey(mnemonic, derivationPath, walletIndex) {
+  async retrievePrivateKey(mnemonic, derivationPath, addressPath) {
     const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
     const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
-    const childNode = masterHDNode.derivePath(derivationPath + '/' + walletIndex)
+    const childNode = masterHDNode.derivePath(derivationPath + '/' + addressPath)
     return bchjs.HDNode.toWIF(childNode)
   }
 
@@ -177,10 +177,16 @@ class SlpNft1Child {
       totalInputTokens = totalInputTokens.plus(slpUtxos.utxos[i].amount)
       let utxoKeyPair
       if (walletHash) {
+        let addressPath
+        if (slpUtxos.utxos[i].address_path) {
+          addressPath = slpUtxos.utxos[i].address_path
+        } else {
+          addressPath = slpUtxos.utxos[i].wallet_index
+        }
         const utxoPkWif = await this.retrievePrivateKey(
           sender.mnemonic,
           sender.derivationPath,
-          slpUtxos.utxos[i].wallet_index
+          addressPath
         )
         utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
       } else {
@@ -264,10 +270,16 @@ class SlpNft1Child {
       totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
       let feeFunderutxoKeyPair
       if (feeFunder.walletHash) {
+        let addressPath
+        if (bchUtxos.utxos[i].address_path) {
+          addressPath = bchUtxos.utxos[i].address_path
+        } else {
+          addressPath = bchUtxos.utxos[i].wallet_index
+        }
         const utxoPkWif = await this.retrievePrivateKey(
           feeFunder.mnemonic,
           feeFunder.derivationPath,
-          bchUtxos.utxos[i].wallet_index
+          addressPath
         )
         feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
       } else {
