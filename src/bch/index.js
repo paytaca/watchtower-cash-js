@@ -37,7 +37,8 @@ class BCH {
           tx_hash: item.txid,
           tx_pos: item.vout,
           value: new BigNumber(item.value),
-          wallet_index: item.wallet_index
+          wallet_index: item.wallet_index,
+          address_path: item.address_path
         }
       })
     }
@@ -102,6 +103,7 @@ class BCH {
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
       transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInput = totalInput.plus(bchUtxos.utxos[i].value)
+      let utxoKeyPair
       if (walletHash) {
         let addressPath
         if (bchUtxos.utxos[i].address_path) {

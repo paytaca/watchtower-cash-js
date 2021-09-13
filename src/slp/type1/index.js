@@ -53,7 +53,8 @@ class SlpType1 {
         tx_pos: item.vout,
         amount: amount,
         value: dustLimit,
-        wallet_index: item.wallet_index
+        wallet_index: item.wallet_index,
+        address_path: item.address_path
       }
     })
     return {
@@ -88,7 +89,8 @@ class SlpType1 {
           tx_hash: item.txid,
           tx_pos: item.vout,
           value: new BigNumber(item.value),
-          wallet_index: item.wallet_index
+          wallet_index: item.wallet_index,
+          address_path: item.address_path
         }
       })
     }

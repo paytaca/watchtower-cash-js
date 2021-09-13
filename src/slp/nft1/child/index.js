@@ -21,7 +21,6 @@ class SlpNft1Child {
     } else {
       resp = await this._api.get(`utxo/slp/${handle}/${tokenId}/?token_type=65`)
     }
-    console.log(resp.data)
     let cumulativeAmount = new BigNumber(0)
     let tokenDecimals = 0
     let filteredUtxos = []
@@ -54,7 +53,8 @@ class SlpNft1Child {
         tx_pos: item.vout,
         amount: amount,
         value: dustLimit,
-        wallet_index: item.wallet_index
+        wallet_index: item.wallet_index,
+        address_path: item.address_path
       }
     })
     return {
@@ -89,7 +89,8 @@ class SlpNft1Child {
           tx_hash: item.txid,
           tx_pos: item.vout,
           value: new BigNumber(item.value),
-          wallet_index: item.wallet_index
+          wallet_index: item.wallet_index,
+          address_path: item.address_path
         }
       })
     }
