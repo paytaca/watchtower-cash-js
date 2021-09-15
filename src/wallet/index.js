@@ -23,12 +23,15 @@ class Wallet {
     return balance.data
   }
 
-  async getHistory ({ walletHash, tokenId }) {
+  async getHistory ({ walletHash, tokenId, page }) {
+    if (!page) {
+      page = 1
+    }
     let history
     if (tokenId) {
-      history = await this._api.get(`history/wallet/${walletHash}/${tokenId}/`)
+      history = await this._api.get(`history/wallet/${walletHash}/${tokenId}/?page=${page}`)
     } else {
-      history = await this._api.get(`history/wallet/${walletHash}/`)
+      history = await this._api.get(`history/wallet/${walletHash}/?page=${page}`)
     }
     return history.data
   }
