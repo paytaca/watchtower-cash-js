@@ -224,7 +224,7 @@ class SlpType1 {
 
     if (tokenRemainder.isGreaterThan(0)) {
       transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(changeAddresses.slp),
+        bchjs.SLP.Address.toLegacyAddress(changeAddresses.slp),
         dustLimit
       )
       outputsCount += 1
