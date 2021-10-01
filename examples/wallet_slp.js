@@ -85,7 +85,7 @@ async function execute () {
       slp: '',
       bch: ''
     },
-    broadcast: true
+    broadcast: false
   }
 
   console.log(data)

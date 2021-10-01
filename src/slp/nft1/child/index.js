@@ -17,9 +17,9 @@ class SlpNft1Child {
   async getSlpUtxos(handle, tokenId, rawTotalSendAmount) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?token_type=65`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?token_type=65&value=${rawTotalSendAmount}`)
     } else {
-      resp = await this._api.get(`utxo/slp/${handle}/${tokenId}/?token_type=65`)
+      resp = await this._api.get(`utxo/slp/${handle}/${tokenId}/?token_type=65&value=${rawTotalSendAmount}`)
     }
     let cumulativeAmount = new BigNumber(0)
     let tokenDecimals = 0
@@ -68,9 +68,9 @@ class SlpNft1Child {
   async getBchUtxos (handle, value) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/?value=${value}`)
     } else {
-      resp = await this._api.get(`utxo/bch/${handle}/`)
+      resp = await this._api.get(`utxo/bch/${handle}/?value=${value}`)
     }
     let cumulativeValue = new BigNumber(0)
     let filteredUtxos = []
