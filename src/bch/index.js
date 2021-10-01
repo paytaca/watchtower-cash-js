@@ -244,7 +244,8 @@ class BCH {
     } else {
       return {
         success: true,
-        transaction: hex
+        transaction: hex,
+        fee: txFee
       }
     }
 
