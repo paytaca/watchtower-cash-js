@@ -330,7 +330,8 @@ class SlpType1 {
     } else {
       return {
         success: true,
-        transaction: hex
+        transaction: hex,
+        fee: txFee
       }
     }
 

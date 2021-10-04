@@ -330,7 +330,8 @@ class SlpNft1Child {
     } else {
       return {
         success: true,
-        transaction: hex
+        transaction: hex,
+        fee: txFee
       }
     }
 
