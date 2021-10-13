@@ -21,12 +21,15 @@ class BCH {
       resp = await this._api.get(`utxo/bch/${handle}/?value=${value}`)
     }
     let cumulativeValue = new BigNumber(0)
+    let inputBytes = 0
     let filteredUtxos = []
     const utxos = resp.data.utxos
     for (let i = 0; i < utxos.length; i++) {
       cumulativeValue = cumulativeValue.plus(utxos[i].value)
       filteredUtxos.push(utxos[i])
-      if (cumulativeValue.isGreaterThanOrEqualTo(value)) {
+      inputBytes += 180  // average byte size of a single input
+      const valuePlusFee = value + inputBytes
+      if (cumulativeValue.isGreaterThanOrEqualTo(valuePlusFee)) {
         break
       }
     }
