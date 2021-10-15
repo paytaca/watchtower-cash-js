@@ -193,10 +193,6 @@ class SlpNft1Child {
     }
     keyPairs.push(utxoKeyPair)
 
-    if (nftDocUrl === undefined) {
-      nftDocUrl = ''
-    }
-
     const nftOpRetGen = new OpReturnGenerator()
     const nftOpReturn = await nftOpRetGen.generateSendOpReturn(
       {
