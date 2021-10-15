@@ -14,7 +14,7 @@ class SlpNft1Child {
     this.dustLimit = 546
   }
 
-  async getSlpUtxos(handle, tokenId, rawTotalSendAmount) {
+  async getNftUtxos(handle, tokenId, rawTotalSendAmount) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
       resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?token_type=65&value=${rawTotalSendAmount}`)
@@ -30,21 +30,22 @@ class SlpNft1Child {
     } else {
       return {
         cumulativeAmount: cumulativeAmount,
+        convertedSendAmount: new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals),
         utxos: []
       }
     }
+    const formattedAmount = new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals)
     for (let i = 0; i < utxos.length; i++) {
       filteredUtxos.push(utxos[i])
       const amount = new BigNumber(utxos[i].amount).times(10 ** tokenDecimals)
       cumulativeAmount = cumulativeAmount.plus(amount)
-      const formattedAmount = new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals)
       if (cumulativeAmount.isGreaterThanOrEqualTo(formattedAmount)) {
         break
       }
     }
     cumulativeAmount = new BigNumber(0)
     const dustLimit = this.dustLimit
-    const finalUtxos = filteredUtxos.map(function (item) {
+    const finalUtxos = filteredUtxos.map(item => {
       const amount = new BigNumber(item.amount).times(10 ** item.decimals)
       cumulativeAmount = cumulativeAmount.plus(amount)
       return {
@@ -108,7 +109,17 @@ class SlpNft1Child {
     return resp
   }
 
-  async send({ sender, feeFunder, tokenId, recipients, changeAddresses, broadcast }) {
+  async send({
+    sender,
+    feeFunder,
+    tokenId,
+    recipient,
+    changeAddress, 
+    broadcast,
+    label,
+    ticker,
+    docUrl
+  }) {
     let walletHash
     if (sender.walletHash !== undefined) {
       walletHash = sender.walletHash
@@ -116,18 +127,8 @@ class SlpNft1Child {
     if (broadcast === undefined) {
       broadcast = true
     }
-    if (!changeAddresses) {
-      changeAddresses = {
-        slp: null,
-        bch: null
-      }
-    }
 
-    let totalTokenSendAmounts = new BigNumber(0)
-    recipients.map(function (recipient) {
-      totalTokenSendAmounts = totalTokenSendAmounts.plus(recipient.amount)
-      return recipient.amount
-    })
+    let totalTokenSendAmount = new BigNumber(1)
 
     let handle
     if (walletHash) {
@@ -135,22 +136,20 @@ class SlpNft1Child {
     } else {
       handle = sender.address
     }
-    const slpUtxos = await this.getSlpUtxos(handle, tokenId, totalTokenSendAmounts)
-    for (let i = 0; i < recipients.length; i++) {
-      const recipient = recipients[i]
-      if (recipient.address.indexOf('simpleledger') < 0) {
-        return {
-          success: false,
-          error: 'recipient should have an SLP address'
-        }
+
+    if (recipient.indexOf('simpleledger') < 0) {
+      return {
+        success: false,
+        error: 'recipient should have an SLP address'
       }
     }
 
+    const nftUtxos = await this.getNftUtxos(handle, tokenId, totalTokenSendAmount)
     try {
-      if (slpUtxos.convertedSendAmount.isGreaterThan(slpUtxos.cumulativeAmount)) {
+      if (nftUtxos.convertedSendAmount.isGreaterThan(nftUtxos.cumulativeAmount)) {
         return {
           success: false,
-          error: `not enough balance in sender (${slpUtxos.cumulativeAmount}) to cover the send amount (${slpUtxos.convertedSendAmount})`
+          error: `not enough balance in sender (${nftUtxos.cumulativeAmount}) to cover the send amount (${nftUtxos.convertedSendAmount})`
         }
       }
     } catch (err) {
@@ -164,75 +163,64 @@ class SlpNft1Child {
 
     let transactionBuilder = new bchjs.TransactionBuilder()
     let outputsCount = 0
-    let totalInputSats = new BigNumber(0)
+
+    // dont loop through all utxos anymore since the number of utxos returned will always be 1
+    // since 1 NFT utxo always has an amount 1 and NFT transactions will always have 1 NFT token amount
+    const nftUtxo = nftUtxos.utxos[0]
+    
+    let totalInputSats = new BigNumber(nftUtxo.value)
     let totalOutputSats = new BigNumber(0)
-    let totalInputTokens = new BigNumber(0)
+    let totalInputTokens = new BigNumber(1)
 
-    let sendAmountsArray = recipients.map(function (recipient) {
-      return new BigNumber(recipient.amount).times(10 ** slpUtxos.tokenDecimals)
-    })
-
-    for (let i = 0; i < slpUtxos.utxos.length; i++) {
-      transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
-      totalInputSats = totalInputSats.plus(slpUtxos.utxos[i].value)
-      totalInputTokens = totalInputTokens.plus(slpUtxos.utxos[i].amount)
-      let utxoKeyPair
-      if (walletHash) {
-        let addressPath
-        if (slpUtxos.utxos[i].address_path) {
-          addressPath = slpUtxos.utxos[i].address_path
-        } else {
-          addressPath = slpUtxos.utxos[i].wallet_index
-        }
-        const utxoPkWif = await this.retrievePrivateKey(
-          sender.mnemonic,
-          sender.derivationPath,
-          addressPath
-        )
-        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+    transactionBuilder.addInput(nftUtxo.tx_hash, nftUtxo.tx_pos)
+    
+    let utxoKeyPair
+    if (walletHash) {
+      let addressPath
+      if (nftUtxo.address_path) {
+        addressPath = nftUtxo.address_path
       } else {
-        utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+        addressPath = nftUtxo.wallet_index
       }
-      keyPairs.push(utxoKeyPair)
-      if (!changeAddresses.slp) {
-        changeAddresses.slp = bchjs.ECPair.toCashAddress(utxoKeyPair)
-      }
+      const utxoPkWif = await this.retrievePrivateKey(
+        sender.mnemonic,
+        sender.derivationPath,
+        addressPath
+      )
+      utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+    } else {
+      utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+    }
+    keyPairs.push(utxoKeyPair)
+
+    if (nftDocUrl === undefined) {
+      nftDocUrl = ''
     }
 
-    let tokenRemainder = totalInputTokens.minus(slpUtxos.convertedSendAmount)
-    if (tokenRemainder.isGreaterThan(0)) {
-      sendAmountsArray.push(tokenRemainder)
-    }
-    const slpGen = new OpReturnGenerator()
-    const slpSendData = slpGen.generateSendOpReturn(
+    const nftOpRetGen = new OpReturnGenerator()
+    const nftOpReturn = await nftOpRetGen.generateSendOpReturn(
       {
-        tokenId: tokenId,
-        sendAmounts: sendAmountsArray
+        label,
+        ticker,
+        docUrl
       }
     )
-    transactionBuilder.addOutput(slpSendData, 0)
-    
     const dustLimit = this.dustLimit
-    recipients.map(function (recipient) {
-      transactionBuilder.addOutput(
-        bchjs.SLP.Address.toLegacyAddress(recipient.address),
-        dustLimit
-      )
-      outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(dustLimit)
-    })
 
-    if (tokenRemainder.isGreaterThan(0)) {
-      transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(changeAddresses.slp),
-        dustLimit
-      )
-      outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(dustLimit)
-    }
+    transactionBuilder.addOutput(nftOpReturn, 0)
+    transactionBuilder.addOutput(
+      bchjs.SLP.Address.toLegacyAddress(recipient.address),
+      dustLimit
+    )
+    totalOutputSats = totalOutputSats.plus(dustLimit)
+    outputsCount += 1 // dust output
 
-    const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
-    outputsCount += 2  // Add extra for sending the SLP and BCH changes,if any
+    // always going to be 2 inputs
+    // 1 for NFT always (explained in the comment after instantiating the txn builder)
+    // 1 for fee funder always since its just the dust
+    const inputsCount = 2
+    // BCH fee output, no change for NFT (explained in the comment after pushing the fee funder keypair)
+    outputsCount += 1 
 
     let byteCount = bchjs.BitcoinCash.getByteCount(
       {
@@ -242,7 +230,7 @@ class SlpNft1Child {
         P2PKH: outputsCount
       }
     )
-    byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
+    byteCount += nftOpReturn.length  // Account for NFT OP_RETURN data byte count
     const feeRate = 1.2 // 1.2 sats/byte fee rate
     const txFee = Math.ceil(byteCount * feeRate)
     let feeFunderHandle
@@ -287,8 +275,11 @@ class SlpNft1Child {
         feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
       }
       keyPairs.push(feeFunderutxoKeyPair)
-      if (!changeAddresses.bch) {
-        changeAddresses.bch = bchjs.ECPair.toCashAddress(feeFunderutxoKeyPair)
+
+      // change will always be on the BCH fee funder
+      // there are no such thing as change using an NFT transaction token
+      if (!changeAddress) {
+        changeAddress = bchjs.ECPair.toCashAddress(feeFunderutxoKeyPair)
       }
     }
 
@@ -297,12 +288,12 @@ class SlpNft1Child {
 
     if (remainderSats.isGreaterThanOrEqualTo(dustLimit)) {
       transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(changeAddresses.bch),
+        bchjs.Address.toLegacyAddress(changeAddress),
         parseInt(remainderSats)
       )
     }
 
-    const combinedUtxos = slpUtxos.utxos.concat(bchUtxos.utxos)
+    const combinedUtxos = nftUtxos.utxos.concat(bchUtxos.utxos)
 
     // Sign each token UTXO being consumed.
     let redeemScript
@@ -320,7 +311,7 @@ class SlpNft1Child {
     const tx = transactionBuilder.build()
     const hex = tx.toHex()
 
-    if (broadcast === true) {
+    if (broadcast) {
       try {
         const response = await this.broadcastTransaction(hex)
         return response.data
@@ -334,7 +325,6 @@ class SlpNft1Child {
         fee: txFee
       }
     }
-
   }
 
 }

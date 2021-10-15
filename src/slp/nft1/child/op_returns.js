@@ -1,19 +1,26 @@
-const slpMdm = require('slp-mdm')
+const BCHJS = require("@psf/bch-js")
+const bchjs = new BCHJS()
 
 class OpReturnGenerator {
 
   constructor () {}
 
-  generateSendOpReturn({ tokenId, sendAmounts }) {
+  async generateSendOpReturn({ label, ticker, docUrl }) {
     try {
-      
-      let amounts = sendAmounts.map(function (amount) {
-        return new slpMdm.BN(amount)
-      })
+      if (docUrl === undefined) {
+        docUrl = ''
+      }
+      const childNftConfig = {
+        name: label,
+        ticker: ticker,
+        documentUrl: docUrl
+      };
 
-      const script = slpMdm.TokenType1.send(tokenId, amounts)
-      return script
+      const OP_RETURN = await bchjs.SLP.NFT1.generateNFTChildGenesisOpReturn(
+        childNftConfig
+      );
 
+      return OP_RETURN
     } catch(err) {
       throw err
     }
