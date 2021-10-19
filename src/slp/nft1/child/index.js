@@ -205,7 +205,7 @@ class SlpNft1Child {
 
     transactionBuilder.addOutput(nftOpReturn, 0)
     transactionBuilder.addOutput(
-      bchjs.SLP.Address.toLegacyAddress(recipient.address),
+      bchjs.SLP.Address.toLegacyAddress(recipient),
       dustLimit
     )
     totalOutputSats = totalOutputSats.plus(dustLimit)
