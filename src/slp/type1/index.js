@@ -30,14 +30,15 @@ class SlpType1 {
     } else {
       return {
         cumulativeAmount: cumulativeAmount,
+        convertedSendAmount: new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals),
         utxos: []
       }
     }
+    const formattedAmount = new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals)
     for (let i = 0; i < utxos.length; i++) {
       filteredUtxos.push(utxos[i])
       const amount = new BigNumber(utxos[i].amount).times(10 ** tokenDecimals)
       cumulativeAmount = cumulativeAmount.plus(amount)
-      const formattedAmount = new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals)
       if (cumulativeAmount.isGreaterThanOrEqualTo(formattedAmount)) {
         break
       }
@@ -135,7 +136,6 @@ class SlpType1 {
     } else {
       handle = sender.address
     }
-    const slpUtxos = await this.getSlpUtxos(handle, tokenId, totalTokenSendAmounts)
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
       if (recipient.address.indexOf('simpleledger') < 0) {
@@ -145,7 +145,8 @@ class SlpType1 {
         }
       }
     }
-
+    
+    const slpUtxos = await this.getSlpUtxos(handle, tokenId, totalTokenSendAmounts)
     try {
       if (slpUtxos.convertedSendAmount.isGreaterThan(slpUtxos.cumulativeAmount)) {
         return {
