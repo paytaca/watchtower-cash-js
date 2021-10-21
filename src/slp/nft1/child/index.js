@@ -12,19 +12,26 @@ class SlpNft1Child {
       timeout: 60 * 1000  // 1 minute
     })
     this.dustLimit = 546
+    this.tokenType = 65
   }
 
-  async getNftUtxos(handle, tokenId, rawTotalSendAmount) {
+  async getNftUtxos (handle, tokenId, rawTotalSendAmount) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?token_type=65&value=${rawTotalSendAmount}`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?&value=${rawTotalSendAmount}`)
     } else {
-      resp = await this._api.get(`utxo/slp/${handle}/${tokenId}/?token_type=65&value=${rawTotalSendAmount}`)
+      resp = await this._api.get(`utxo/slp/${handle}/${tokenId}/?&value=${rawTotalSendAmount}`)
     }
     let cumulativeAmount = new BigNumber(0)
     let tokenDecimals = 0
     let filteredUtxos = []
-    const utxos = resp.data.utxos
+    const utxos = resp.data.utxos.filter(u => {
+      return (
+        u.token_type === this.tokenType
+        && u.amount === 1
+      )
+    })      
+      
     if (utxos.length > 0) {
       tokenDecimals = utxos[0].decimals
     } else {
@@ -52,7 +59,7 @@ class SlpNft1Child {
         tokenId: item.tokenid,
         tx_hash: item.txid,
         tx_pos: item.vout,
-        amount: amount,
+        tokenQty: Number(amount),
         value: dustLimit,
         wallet_index: item.wallet_index,
         address_path: item.address_path
@@ -97,28 +104,25 @@ class SlpNft1Child {
     }
   }
 
-  async retrievePrivateKey(mnemonic, derivationPath, addressPath) {
+  async retrievePrivateKey (mnemonic, derivationPath, addressPath) {
     const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
     const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
     const childNode = masterHDNode.derivePath(derivationPath + '/' + addressPath)
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async broadcastTransaction(txHex) {
+  async broadcastTransaction (txHex) {
     const resp = await this._api.post('broadcast/', { transaction: txHex })
     return resp
   }
 
-  async send({
+  async send ({
     sender,
     feeFunder,
-    tokenId,
+    childTokenId,
     recipient,
-    changeAddress, 
-    broadcast,
-    label,
-    ticker,
-    docUrl
+    changeAddress,
+    broadcast
   }) {
     let walletHash
     if (sender.walletHash !== undefined) {
@@ -128,7 +132,7 @@ class SlpNft1Child {
       broadcast = true
     }
 
-    let totalTokenSendAmount = new BigNumber(1)
+    const totalTokenSendAmount = new BigNumber(1)
 
     let handle
     if (walletHash) {
@@ -144,7 +148,7 @@ class SlpNft1Child {
       }
     }
 
-    const nftUtxos = await this.getNftUtxos(handle, tokenId, totalTokenSendAmount)
+    const nftUtxos = await this.getNftUtxos(handle, childTokenId, totalTokenSendAmount)
     try {
       if (nftUtxos.convertedSendAmount.isGreaterThan(nftUtxos.cumulativeAmount)) {
         return {
@@ -163,18 +167,12 @@ class SlpNft1Child {
 
     let transactionBuilder = new bchjs.TransactionBuilder()
     let outputsCount = 0
-
-    // dont loop through all utxos anymore since the number of utxos returned will always be 1
-    // since 1 NFT utxo always has an amount 1 and NFT transactions will always have 1 NFT token amount
-    const nftUtxo = nftUtxos.utxos[0]
+    let inputsCount = 0
     
-    let totalInputSats = new BigNumber(nftUtxo.value)
+    let totalInputSats = new BigNumber(0)
     let totalOutputSats = new BigNumber(0)
-    let totalInputTokens = new BigNumber(1)
-
-    transactionBuilder.addInput(nftUtxo.tx_hash, nftUtxo.tx_pos)
-    
     let utxoKeyPair
+
     if (walletHash) {
       let addressPath
       if (nftUtxo.address_path) {
@@ -186,37 +184,30 @@ class SlpNft1Child {
         sender.mnemonic,
         sender.derivationPath,
         addressPath
-      )
-      utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+        )
+        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
     } else {
       utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
     }
-    keyPairs.push(utxoKeyPair)
 
+    for (const nftUtxo of nftUtxos.utxos) {
+      transactionBuilder.addInput(nftUtxo.tx_hash, nftUtxo.tx_pos)
+      keyPairs.push(utxoKeyPair)
+      totalInputSats = totalInputSats.plus(nftUtxo.value)
+      inputsCount += 1
+    }
+    inputsCount += 1 // fee funder input
+ 
     const nftOpRetGen = new OpReturnGenerator()
-    const nftOpReturn = await nftOpRetGen.generateSendOpReturn(
-      {
-        label,
-        ticker,
-        docUrl
-      }
-    )
-    const dustLimit = this.dustLimit
+    const nftOpReturn = nftOpRetGen.generateSendOpReturn(nftUtxos.utxos)
 
     transactionBuilder.addOutput(nftOpReturn, 0)
     transactionBuilder.addOutput(
       bchjs.SLP.Address.toLegacyAddress(recipient),
-      dustLimit
+      this.dustLimit
     )
-    totalOutputSats = totalOutputSats.plus(dustLimit)
-    outputsCount += 1 // dust output
-
-    // always going to be 2 inputs
-    // 1 for NFT always (explained in the comment after instantiating the txn builder)
-    // 1 for fee funder always since its just the dust
-    const inputsCount = 2
-    // BCH fee output, no change for NFT (explained in the comment after pushing the fee funder keypair)
-    outputsCount += 1 
+    totalOutputSats = totalOutputSats.plus(this.dustLimit)
+    outputsCount += 2 // dust output and possible change output
 
     let byteCount = bchjs.BitcoinCash.getByteCount(
       {
@@ -235,6 +226,7 @@ class SlpNft1Child {
     } else {
       feeFunderHandle = feeFunder.address
     }
+
     const bchUtxos = await this.getBchUtxos(feeFunderHandle, txFee)
 
     if (bchUtxos.cumulativeValue < txFee) {
@@ -281,8 +273,8 @@ class SlpNft1Child {
 
     // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
-
-    if (remainderSats.isGreaterThanOrEqualTo(dustLimit)) {
+    
+    if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(changeAddress),
         parseInt(remainderSats)

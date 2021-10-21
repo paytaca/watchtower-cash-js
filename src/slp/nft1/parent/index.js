@@ -73,15 +73,24 @@ class SlpNft1Parent {
     }
   }
 
-  async getGroupTokenBalance (groupTokenId, handle) {
-    let resp
-    if (handle.indexOf('wallet:') > -1) {
-      const walletHash = handle.split('wallet:')[1]
-      resp = await this._api.get(`balance/wallet/${walletHash}/${groupTokenId}/`)
-    } else {
-      resp = await this._api.get(`balance/slp/${handle}/${groupTokenId}/`)
+  async getGroupTokenBalance ({ groupTokenId, wallet }) {
+    try {
+      let resp
+      if (wallet.indexOf('simpleledger:') > -1) {
+        resp = await this._api.get(`balance/slp/${wallet}/${groupTokenId}/`)
+      } else {
+        resp = await this._api.get(`balance/wallet/${wallet}/${groupTokenId}/`)
+      }
+      return {
+        success: true,
+        balance: resp.data.balance
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: err
+      }
     }
-    return resp.data.balance
   } 
 
   async getBchUtxos (handle, value) {
@@ -264,15 +273,8 @@ class SlpNft1Parent {
     if (isChildNft) {
       nftOpReturn = await nftOpRetGen.generateChildMintOpReturn(label, ticker, docUrl)
     } else {
-      let nftGroupTokenBal = await this.getGroupTokenBalance(groupTokenId, handle)
       const totalTokenSendAmountTemp = Number(totalTokenSendAmount)
-      
-      let change = 0
-      hasNftGroupChange = nftGroupTokenBal !== totalTokenSendAmountTemp
-      if (hasNftGroupChange) {
-        change = nftGroupTokenBal - totalTokenSendAmountTemp
-      }
-
+      hasNftGroupChange = nftUtxos.utxos[0].tokenQty !== totalTokenSendAmountTemp
       nftOpReturn = await nftOpRetGen.generateGroupSendOpReturn(nftUtxos.utxos)
     }
 

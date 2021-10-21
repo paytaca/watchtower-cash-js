@@ -2,7 +2,12 @@ const Watchtower = require('../src')
 
 const watchtower = new Watchtower()
 
-const mintBatonUtxo = {
+const groupTokenBalData = {
+    groupTokenId: 'f019cfa73559836c13e00d70e7105d4d43377bb6a9861595a7b2373a66aa0bc7', // <-- NFT parent token ID
+    wallet: 'simpleledger:qpq82xgmau3acnuvypkyj0khks4a6ak7zqj6ffwnh8' // <-- address or wallet hash
+}
+
+const mintBatonData = {
     sender: {
         address: 'simpleledger:qp3et5cla7jju6z2lfc5v9nr0r4q54edqqdl5mxfjc',
         wif: 'XXX'  // <-- private key of the sender address
@@ -28,7 +33,7 @@ const mintChildData = {
         address: 'bitcoincash:qq46tffgznfew8e78dkyt56k9xcmetnelcma256km7',
         wif: 'YYY' // <-- private key of the feeFunder address
     },
-    groupTokenId: '7f8889682d57369ed0e32336f8b7e0ffec625a35cca183f4e81fde4e71a538a1', // <-- NFT parent token ID
+    groupTokenId: 'f019cfa73559836c13e00d70e7105d4d43377bb6a9861595a7b2373a66aa0bc7', // <-- NFT parent token ID
     recipient: 'simpleledger:qpq82xgmau3acnuvypkyj0khks4a6ak7zqj6ffwnh8', // <-- only 1 since every NFT is unique and amount is always 1
     label: 'My Unique NFT Token',
     ticker: 'UNI-NFT', // <-- NFT symbol / abbreviation
@@ -40,14 +45,27 @@ const mintChildData = {
 
 }
 
-watchtower.SLP.NFT1.Parent.generateMintingBatonUtxo(data1).then(result => {
+
+// check Parent Group token balance
+watchtower.SLP.NFT1.Parent.getGroupTokenBalance(groupTokenBalData).then(result => {
+    if (result.success) {
+        console.log(result.balance)
+    } else {
+        console.log(result.error)
+    }
+})
+
+watchtower.SLP.NFT1.Parent.generateMintingBatonUtxo(mintBatonData).then(result => {
     console.log('MINT baton UTXO result:')
     if (result.success) {
-        console.log(result)
+        // Your logic here when send transaction is successful
+        console.log(result.txid)
+
+        // or if broadcast is set to false, you can just get the raw transaction hex
+        console.log(result.transaction)
         
-        watchtower.SLP.NFT1.Parent.mintChildNft(data2).then(result => {
+        watchtower.SLP.NFT1.Parent.mintChildNft(mintChildData).then(result => {
             console.log('MINT Child NFT result')
-            console.log(result)
 
             if (result.success) {
                 // Your logic here when send transaction is successful
@@ -61,6 +79,6 @@ watchtower.SLP.NFT1.Parent.generateMintingBatonUtxo(data1).then(result => {
             }
         })
     } else {
-        console.log(result)
+        console.log(result.error)
     }
 })

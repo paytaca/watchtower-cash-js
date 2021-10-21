@@ -5,23 +5,11 @@ class OpReturnGenerator {
 
   constructor () {}
 
-  async generateSendOpReturn({ label, ticker, docUrl }) {
+  generateSendOpReturn (childNftUtxos) {
     try {
-      if (docUrl === undefined) {
-        docUrl = ''
-      }
-      const childNftConfig = {
-        name: label,
-        ticker: ticker,
-        documentUrl: docUrl
-      };
-
-      const OP_RETURN = await bchjs.SLP.NFT1.generateNFTChildGenesisOpReturn(
-        childNftConfig
-      );
-
-      return OP_RETURN
-    } catch(err) {
+      const OP_RETURN = bchjs.SLP.NFT1.generateNFTChildSendOpReturn(childNftUtxos, 1)
+      return OP_RETURN.script
+    } catch (err) {
       throw err
     }
   }
