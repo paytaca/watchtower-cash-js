@@ -173,24 +173,23 @@ class SlpNft1Child {
     let totalOutputSats = new BigNumber(0)
     let utxoKeyPair
 
-    if (walletHash) {
-      let addressPath
-      if (nftUtxo.address_path) {
-        addressPath = nftUtxo.address_path
-      } else {
-        addressPath = nftUtxo.wallet_index
-      }
-      const utxoPkWif = await this.retrievePrivateKey(
-        sender.mnemonic,
-        sender.derivationPath,
-        addressPath
-        )
-        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
-    } else {
-      utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
-    }
-
     for (const nftUtxo of nftUtxos.utxos) {
+      if (walletHash) {
+        let addressPath
+        if (nftUtxo.address_path) {
+          addressPath = nftUtxo.address_path
+        } else {
+          addressPath = nftUtxo.wallet_index
+        }
+        const utxoPkWif = await this.retrievePrivateKey(
+          sender.mnemonic,
+          sender.derivationPath,
+          addressPath
+          )
+          utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+      } else {
+        utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+      }
       transactionBuilder.addInput(nftUtxo.tx_hash, nftUtxo.tx_pos)
       keyPairs.push(utxoKeyPair)
       totalInputSats = totalInputSats.plus(nftUtxo.value)
