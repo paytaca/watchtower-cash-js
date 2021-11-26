@@ -161,7 +161,7 @@ class BCH {
 
     const feeRate = 1.1 // 1.1 sats/byte fee rate
 
-    const txFee = Math.ceil(byteCount * feeRate)
+    let txFee = Math.ceil(byteCount * feeRate)
     let senderRemainder = 0
 
     let feeFunderUtxos
@@ -187,6 +187,8 @@ class BCH {
           bchjs.Address.toLegacyAddress(changeAddress),
           parseInt(senderRemainder)
         )
+      } else {
+        txFee += senderRemainder.toNumber()
       }
       
       let feeInputContrib = new BigNumber(0)
@@ -204,6 +206,8 @@ class BCH {
           bchjs.Address.toLegacyAddress(feeFunder.address),
           parseInt(feeFunderRemainder)
         )
+      } else {
+        txFee += feeFunderRemainder.toNumber()
       }
     } else {
       // Send the BCH change back to the wallet, if any
@@ -213,6 +217,8 @@ class BCH {
           bchjs.Address.toLegacyAddress(changeAddress),
           parseInt(senderRemainder)
         )
+      } else {
+        txFee += senderRemainder.toNumber()
       }
     }
 

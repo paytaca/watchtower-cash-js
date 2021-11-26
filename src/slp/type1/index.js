@@ -245,7 +245,7 @@ class SlpType1 {
     )
     byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
     const feeRate = 1.2 // 1.2 sats/byte fee rate
-    const txFee = Math.ceil(byteCount * feeRate)
+    let txFee = Math.ceil(byteCount * feeRate)
     let feeFunderHandle
     if (feeFunder.walletHash) {
       feeFunderHandle = 'wallet:' + feeFunder.walletHash
@@ -301,6 +301,8 @@ class SlpType1 {
         bchjs.Address.toLegacyAddress(changeAddresses.bch),
         parseInt(remainderSats)
       )
+    } else {
+      txFee += remainderSats.toNumber()
     }
 
     const combinedUtxos = slpUtxos.utxos.concat(bchUtxos.utxos)

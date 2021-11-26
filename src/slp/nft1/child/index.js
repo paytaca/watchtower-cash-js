@@ -218,7 +218,7 @@ class SlpNft1Child {
     )
     byteCount += nftOpReturn.length  // Account for NFT OP_RETURN data byte count
     const feeRate = 1.2 // 1.2 sats/byte fee rate
-    const txFee = Math.ceil(byteCount * feeRate)
+    let txFee = Math.ceil(byteCount * feeRate)
     let feeFunderHandle
     if (feeFunder.walletHash) {
       feeFunderHandle = 'wallet:' + feeFunder.walletHash
@@ -278,6 +278,8 @@ class SlpNft1Child {
         bchjs.Address.toLegacyAddress(changeAddress),
         parseInt(remainderSats)
       )
+    } else {
+      txFee += remainderSats.toNumber()
     }
 
     const combinedUtxos = nftUtxos.utxos.concat(bchUtxos.utxos)
