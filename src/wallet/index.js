@@ -23,15 +23,18 @@ class Wallet {
     return balance.data
   }
 
-  async getHistory ({ walletHash, tokenId, page }) {
+  async getHistory ({ walletHash, tokenId, page, recordType }) {
     if (!page) {
       page = 1
     }
+    if (!recordType) {
+      recordType = 'all'
+    }
     let history
     if (tokenId) {
-      history = await this._api.get(`history/wallet/${walletHash}/${tokenId}/?page=${page}`)
+      history = await this._api.get(`history/wallet/${walletHash}/${tokenId}/?page=${page}&type=${recordType}`)
     } else {
-      history = await this._api.get(`history/wallet/${walletHash}/?page=${page}`)
+      history = await this._api.get(`history/wallet/${walletHash}/?page=${page}&type=${recordType}`)
     }
     return history.data
   }
