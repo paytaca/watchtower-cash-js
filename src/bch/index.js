@@ -2,6 +2,8 @@ const axios = require('axios')
 const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
+const OpReturnGenerator = require('./op_returns')
+
 
 class BCH {
 
@@ -59,7 +61,7 @@ class BCH {
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async send({ sender, recipients, feeFunder, changeAddress, broadcast }) {
+  async send({ sender, recipients, feeFunder, changeAddress, broadcast, data }) {
     let walletHash
     if (sender.walletHash !== undefined) {
       walletHash = sender.walletHash
@@ -134,6 +136,13 @@ class BCH {
     }
 
     let inputsCount = bchUtxos.utxos.length
+
+    if (data) {
+      const dataOpRetGen = new OpReturnGenerator()
+      const dataOpReturn = dataOpRetGen.generateDataOpReturn(data)
+      transactionBuilder.addOutput(dataOpReturn, 0)
+      outputsCount += 1
+    }
 
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
