@@ -55,14 +55,16 @@ const data = {
         }
         // <-- You can add more recipients into this array
     ],
-    // (Optional) <-- if feeFunder is set, fees will be paid by this address
+    //Fee funder (Optional) <-- if feeFunder is set, fees will be paid by this address
     feeFunder: {
         address: 'bitcoincash:qr5ntfv5j7308fsuh08sqxkgp9m87cqqtq3rvgnma9',
         wif: 'YYY'  // <-- private key of the feeFunder address
     },
-    // (Optional) <-- set a custom change address
+    // Change address (Optional) <-- set a custom change address
     changeAddress: 'bitcoincash:qzrhqu0jqslzt9kppw8gtwlkhqwnfrn2dc63yv2saj'
-    // (Optional) <-- Broadcast or just return raw transaction hex
+    // Data (Optional) <-- embed some string data in OP_RETURN
+    data: 'Hello world!',
+    // Broadcast (Optional) <-- Broadcast or just return raw transaction hex
     broadcast: true  // true by default
 }
 
@@ -98,17 +100,17 @@ const data = {
             amount: 101
         } // <-- You can add more recipients into this array
     ],
-    // (Optional) <-- if feeFunder is set, fees will be paid by this address
+    // Fee funder (Optional) <-- if feeFunder is set, fees will be paid by this address
     feeFunder: {
         address: 'bitcoincash:qq46tffgznfew8e78dkyt56k9xcmetnelcma256km7',
         wif: 'YYY' // <-- private key of the feeFunder address
     },
-    // (Optional) <-- set a custom change addresses
+    // Change addresses (Optional) <-- set a custom change addresses
     changeAddresses: {
         slp: 'simpleledger:qzn4k4lm22rlzlyjccz4r29mz0wpuf9gz5zj2l9w6y',
         bch: 'bitcoincash:qp46gzcw0ycxtnngrhp0xddp2qxnyjnepg2qc02eeh'
     }
-    // (Optional) <-- Broadcast or just return raw transaction hex
+    // Broadcast (Optional) <-- Broadcast or just return raw transaction hex
     broadcast: true  // true by default
 }
 
@@ -148,9 +150,9 @@ const mintBatonData = {
     },
     groupTokenId: 'f019cfa73559836c13e00d70e7105d4d43377bb6a9861595a7b2373a66aa0bc7', // <-- NFT parent token ID
     recipient: 'simpleledger:qp3et5cla7jju6z2lfc5v9nr0r4q54edqqdl5mxfjc', // <-- only 1 since every NFT is unique and amount is always 1
-    // (Optional) <-- set a custom change BCH address (fee funder address by default)
+    // Change address (Optional) <-- set a custom change BCH address (fee funder address by default)
     changeAddress: 'bitcoincash:qp46gzcw0ycxtnngrhp0xddp2qxnyjnepg2qc02eeh',
-    // (Optional) <-- Broadcast or just return raw transaction hex
+    // Broadcast (Optional) <-- Broadcast or just return raw transaction hex
     broadcast: true  // true by default
 }
 
@@ -168,9 +170,9 @@ const mintChildData = {
     label: 'My Unique NFT Token',
     ticker: 'UNI-NFT', // <-- NFT symbol / abbreviation
     docUrl: 'https://uninft.com', // (Optional) <-- Document URL of token
-    // (Optional) <-- set a custom change BCH address (fee funder address by default)
+    // Change address (Optional) <-- set a custom change BCH address (fee funder address by default)
     changeAddress: 'bitcoincash:qp46gzcw0ycxtnngrhp0xddp2qxnyjnepg2qc02eeh',
-    // (Optional) <-- Broadcast or just return raw transaction hex
+    // Broadcast (Optional) <-- Broadcast or just return raw transaction hex
     broadcast: true  // true by default
 
 }
@@ -228,9 +230,9 @@ const data = {
     },
     childTokenId: '5c9aec029dcdea655622fcccfd279b2bc5e300c959f7009dc3c8c20a6905b8fd', // <-- child NFT token id to be sent
     recipient: 'simpleledger:qzstfxd0s849y0gym65mqutvtkdurn77tvgjk27537',
-    // (Optional) <-- set a custom change BCH address (fee funder address by default)
+    // Change address (Optional) <-- set a custom change BCH address (fee funder address by default)
     changeAddress: 'bitcoincash:qp46gzcw0ycxtnngrhp0xddp2qxnyjnepg2qc02eeh',
-    // (Optional) <-- Broadcast or just return raw transaction hex
+    // Broadcast (Optional) <-- Broadcast or just return raw transaction hex
     broadcast: true  // true by default
 }
 
