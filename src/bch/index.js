@@ -178,6 +178,7 @@ class BCH {
       feeFunderUtxos = await this.getBchUtxos(feeFunder.address, txFee)
       if (feeFunderUtxos.cumulativeValue < txFee) {
         return {
+          fee: txFee,
           success: false,
           error: `not enough balance in fee funder (${feeFunderUtxos.cumulativeValue}) to cover the fee (${txFee})`
         }
@@ -221,13 +222,22 @@ class BCH {
     } else {
       // Send the BCH change back to the wallet, if any
       senderRemainder = totalInput.minus(totalOutput.plus(txFee))
-      if (senderRemainder.isGreaterThan(this.dustLimit)) {
+      if (senderRemainder.isGreaterThanOrEqualTo(this.dustLimit)) {
         transactionBuilder.addOutput(
           bchjs.Address.toLegacyAddress(changeAddress),
           parseInt(senderRemainder)
         )
       } else {
-        txFee += senderRemainder.toNumber()
+        const senderRemainderNum = senderRemainder.toNumber()
+        if (senderRemainderNum < 0) {
+          return {
+            fee: txFee,
+            success: false,
+            error: `not enough balance in sender (${senderRemainder}) to cover the fee (${txFee})`
+          }
+        } else {
+          txFee += senderRemainderNum
+        }
       }
     }
 
@@ -252,7 +262,7 @@ class BCH {
     const tx = transactionBuilder.build()
     const hex = tx.toHex()
 
-    if (broadcast === true) {
+    if (broadcast) {
       try {
         const response = await this.broadcastTransaction(hex)
         return response.data
@@ -266,7 +276,6 @@ class BCH {
         fee: txFee
       }
     }
-
   }
 }
 
