@@ -230,6 +230,7 @@ class SlpNft1Child {
 
     if (bchUtxos.cumulativeValue < txFee) {
       return {
+        fee: txFee,
         success: false,
         error: `not enough balance in fee funder (${bchUtxos.cumulativeValue}) to cover the fee (${txFee})`
       }
@@ -279,7 +280,16 @@ class SlpNft1Child {
         parseInt(remainderSats)
       )
     } else {
-      txFee += remainderSats.toNumber()
+      const remainderSatsNum = remainderSats.toNumber()
+      if (remainderSatsNum < 0) {
+        return {
+          fee: txFee,
+          success: false,
+          error: `not enough balance in sender (${remainderSats}) to cover the fee (${txFee})`
+        }
+      } else {
+        txFee += remainderSatsNum
+      }
     }
 
     const combinedUtxos = nftUtxos.utxos.concat(bchUtxos.utxos)

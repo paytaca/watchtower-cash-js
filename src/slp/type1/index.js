@@ -256,6 +256,7 @@ class SlpType1 {
 
     if (bchUtxos.cumulativeValue < txFee) {
       return {
+        fee: txFee,
         success: false,
         error: `not enough balance in fee funder (${bchUtxos.cumulativeValue}) to cover the fee (${txFee})`
       }
@@ -302,7 +303,16 @@ class SlpType1 {
         parseInt(remainderSats)
       )
     } else {
-      txFee += remainderSats.toNumber()
+      const remainderSatsNum = remainderSats.toNumber()
+      if (remainderSatsNum < 0) {
+        return {
+          fee: txFee,
+          success: false,
+          error: `not enough balance in sender (${remainderSats}) to cover the fee (${txFee})`
+        }
+      } else {
+        txFee += remainderSatsNum
+      }
     }
 
     const combinedUtxos = slpUtxos.utxos.concat(bchUtxos.utxos)
@@ -323,7 +333,7 @@ class SlpType1 {
     const tx = transactionBuilder.build()
     const hex = tx.toHex()
 
-    if (broadcast === true) {
+    if (broadcast) {
       try {
         const response = await this.broadcastTransaction(hex)
         return response.data

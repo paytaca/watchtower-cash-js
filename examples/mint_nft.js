@@ -42,7 +42,6 @@ const mintChildData = {
     changeAddress: 'bitcoincash:qp46gzcw0ycxtnngrhp0xddp2qxnyjnepg2qc02eeh',
     // (Optional) <-- Broadcast or just return raw transaction hex
     broadcast: true  // true by default
-
 }
 
 
