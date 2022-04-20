@@ -101,7 +101,8 @@ class BCH {
     const keyPairs = []
 
     let transactionBuilder = new bchjs.TransactionBuilder()
-    let outputsCount = 0
+    let p2pkhOutputsCount = 0
+    let p2shOutputsCount = 0
     let totalInput = new BigNumber(0)
     let totalOutput = new BigNumber(0)
     
@@ -141,7 +142,7 @@ class BCH {
       const dataOpRetGen = new OpReturnGenerator()
       const dataOpReturn = dataOpRetGen.generateDataOpReturn(data)
       transactionBuilder.addOutput(dataOpReturn, 0)
-      outputsCount += 1
+      p2pkhOutputsCount += 1
     }
 
     for (let i = 0; i < recipients.length; i++) {
@@ -151,20 +152,26 @@ class BCH {
         bchjs.Address.toLegacyAddress(recipient.address),
         parseInt(sendAmount)
       )
-      outputsCount += 1
+
+      if (bchjs.Address.isP2SHAddress(recipient.address)) {
+        p2shOutputsCount += 1
+      } else {
+        p2pkhOutputsCount += 1
+      }
       totalOutput = totalOutput.plus(sendAmount)
     }
 
     if (feeFunder !== undefined) {
       inputsCount += 1  // Add extra for the fee funder input
     }
-    outputsCount += 1  // Add extra for sending the BCH change,if any
+    p2pkhOutputsCount += 1  // Add extra for sending the BCH change,if any
     let byteCount = bchjs.BitcoinCash.getByteCount(
       {
         P2PKH: inputsCount
       },
       {
-        P2PKH: outputsCount
+        P2PKH: p2pkhOutputsCount,
+        P2SH: p2shOutputsCount
       }
     )
 
