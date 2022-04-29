@@ -3,6 +3,7 @@ const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
 const OpReturnGenerator = require('./op_returns')
+const slpOpRetGen = new OpReturnGenerator()
  
 class SlpType1 {
 
@@ -138,7 +139,7 @@ class SlpType1 {
     }
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      if (recipient.address.indexOf('simpleledger') < 0) {
+      if (!recipient.address.startsWith('simpleledger')) {
         return {
           success: false,
           error: 'recipient should have an SLP address'
@@ -204,36 +205,35 @@ class SlpType1 {
     if (tokenRemainder.isGreaterThan(0)) {
       sendAmountsArray.push(tokenRemainder)
     }
-    const slpGen = new OpReturnGenerator()
-    const slpSendData = slpGen.generateSendOpReturn(
+    const slpSendData = slpOpRetGen.generateSendOpReturn(
       {
         tokenId: tokenId,
         sendAmounts: sendAmountsArray
       }
     )
     transactionBuilder.addOutput(slpSendData, 0)
+    outputsCount += 1
     
-    const dustLimit = this.dustLimit
     recipients.map(function (recipient) {
       transactionBuilder.addOutput(
         bchjs.SLP.Address.toLegacyAddress(recipient.address),
-        dustLimit
+        this.dustLimit
       )
       outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(dustLimit)
+      totalOutputSats = totalOutputSats.plus(this.dustLimit)
     })
 
     if (tokenRemainder.isGreaterThan(0)) {
       transactionBuilder.addOutput(
         bchjs.SLP.Address.toLegacyAddress(changeAddresses.slp),
-        dustLimit
+        this.dustLimit
       )
       outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(dustLimit)
+      totalOutputSats = totalOutputSats.plus(this.dustLimit)
     }
 
     const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
-    outputsCount += 2  // Add extra for sending the SLP and BCH changes,if any
+    outputsCount += 1  // Add extra for sending BCH change,if any
 
     let byteCount = bchjs.BitcoinCash.getByteCount(
       {
@@ -297,7 +297,7 @@ class SlpType1 {
     // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
 
-    if (remainderSats.isGreaterThanOrEqualTo(dustLimit)) {
+    if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
       transactionBuilder.addOutput(
         bchjs.Address.toLegacyAddress(changeAddresses.bch),
         parseInt(remainderSats)
@@ -347,7 +347,263 @@ class SlpType1 {
         fee: txFee
       }
     }
+  }
 
+  async create({
+    creator,
+    feeFunder,
+    initialMintRecipient,
+    mintBatonRecipient,
+    changeAddress,
+    broadcast,
+    name,
+    ticker,
+    decimals,
+    initialQty,
+    docUrl = '',
+    docHash = '',
+    fixedSupply = false
+  }) {
+    
+    if (fixedSupply) {
+      if (initialQty < 1) {
+        return {
+          success: false,
+          error: 'initial quantity must be greater than or equal to 1 on fixed supply'
+        } 
+      }
+    } else {
+      if (initialQty < 0) {
+        return {
+          success: false,
+          error: 'initial quantity must be greater than or equal to 0'
+        }
+      }
+    }
+    
+    let walletHash
+    if (creator.walletHash !== undefined) {
+      walletHash = creator.walletHash
+    }
+
+    if (broadcast == undefined) {
+      broadcast = true
+    }
+
+    let totalSendAmountSats = this.dustLimit
+    if (!fixedSupply) {
+      totalSendAmountSats *= 2
+      if (!mintBatonRecipient.startsWith('simpleledger')) {
+        return {
+          success: false,
+          error: 'mint baton recipient should have an SLP address'
+        }
+      }
+    }
+
+    if (!initialMintRecipient.startsWith('simpleledger')) {
+      return {
+        success: false,
+        error: 'initial mint recipient should be an SLP address'
+      }
+    }
+
+    let handle
+    if (walletHash) {
+      handle = 'wallet:' + walletHash
+    } else {
+      handle = creator.address
+    }
+    const bchUtxos = await this.getBchUtxos(handle, totalSendAmountSats)
+    if (bchUtxos.cumulativeValue < totalSendAmountSats) {
+      return {
+        success: false,
+        error: `not enough balance in creator (${bchUtxos.cumulativeValue}) to cover the create amount (${totalSendAmountSats})`
+      }
+    }
+    
+    const keyPairs = []
+
+    let transactionBuilder = new bchjs.TransactionBuilder()
+    let outputsCount = 0
+    let totalInput = new BigNumber(0)
+    let totalOutput = new BigNumber(totalSendAmountSats)
+    
+    for (let i = 0; i < bchUtxos.utxos.length; i++) {
+      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
+      totalInput = totalInput.plus(bchUtxos.utxos[i].value)
+      let utxoKeyPair
+      if (walletHash) {
+        let addressPath
+        if (bchUtxos.utxos[i].address_path) {
+          addressPath = bchUtxos.utxos[i].address_path
+        } else {
+          addressPath = bchUtxos.utxos[i].wallet_index
+        }
+        const utxoPkWif = await this.retrievePrivateKey(
+          creator.mnemonic,
+          creator.derivationPath,
+          addressPath
+        )
+        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+        keyPairs.push(utxoKeyPair)
+        if (!changeAddress) {
+          changeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)
+        }
+      } else {
+        const creatorKeyPair = bchjs.ECPair.fromWIF(creator.wif)
+        keyPairs.push(creatorKeyPair)
+        if (!changeAddress) {
+          changeAddress = bchjs.ECPair.toCashAddress(creatorKeyPair)
+        }
+      }
+    }
+
+    let inputsCount = bchUtxos.utxos.length
+    const slpCreateData = await slpOpRetGen.generateGenesisOpReturn(
+      fixedSupply,
+      name,
+      ticker,
+      decimals,
+      initialQty,
+      docUrl,
+      docHash
+    )
+    transactionBuilder.addOutput(slpCreateData, 0)
+    transactionBuilder.addOutput(
+      bchjs.SLP.Address.toLegacyAddress(initialMintRecipient),
+      this.dustLimit
+    )
+    outputsCount += 2
+
+    if (!fixedSupply) {
+      transactionBuilder.addOutput(
+        bchjs.SLP.Address.toLegacyAddress(mintBatonRecipient),
+        this.dustLimit
+      )
+      outputsCount += 1
+    }
+
+    if (feeFunder !== undefined) {
+      inputsCount += 1  // Add extra for the fee funder input
+    }
+    outputsCount += 1  // Add extra for sending the BCH change,if any
+    let byteCount = bchjs.BitcoinCash.getByteCount(
+      {
+        P2PKH: inputsCount
+      },
+      {
+        P2PKH: outputsCount
+      }
+    )
+
+    const feeRate = 1.2 // 1.2 sats/byte fee rate
+    let txFee = Math.ceil(byteCount * feeRate)
+    let creatorRemainder = 0
+
+    let feeFunderUtxos
+    if (feeFunder !== undefined) {
+      feeFunderUtxos = await this.getBchUtxos(feeFunder.address, txFee)
+      if (feeFunderUtxos.cumulativeValue < txFee) {
+        return {
+          fee: txFee,
+          success: false,
+          error: `not enough balance in fee funder (${feeFunderUtxos.cumulativeValue}) to cover the fee (${txFee})`
+        }
+      }
+      if (feeFunderUtxos.utxos.length > 2) {
+        return {
+          success: false,
+          error: 'UTXOs of your fee funder are thinly spread out which can cause inaccurate fee computation'
+        }
+      }
+
+      // Send BCH change back to creator address, if any
+      creatorRemainder = totalInput.minus(totalOutput)
+      if (creatorRemainder.isGreaterThanOrEqualTo(this.dustLimit)) {
+        transactionBuilder.addOutput(
+          bchjs.Address.toLegacyAddress(changeAddress),
+          parseInt(creatorRemainder)
+        )
+      } else {
+        txFee += creatorRemainder.toNumber()
+      }
+      
+      let feeInputContrib = new BigNumber(0)
+      for (let i = 0; i < feeFunderUtxos.utxos.length; i++) {
+        transactionBuilder.addInput(feeFunderUtxos.utxos[i].tx_hash, feeFunderUtxos.utxos[i].tx_pos)
+        totalInput = totalInput.plus(feeFunderUtxos.utxos[i].value)
+        feeInputContrib = feeInputContrib.plus(feeFunderUtxos.utxos[i].value)
+        const feeFunderKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+        keyPairs.push(feeFunderKeyPair)
+      }
+
+      const feeFunderRemainder = feeInputContrib.minus(txFee)
+      if (feeFunderRemainder.isGreaterThan(this.dustLimit)) {
+        transactionBuilder.addOutput(
+          bchjs.SLP.Address.toLegacyAddress(feeFunder.address),
+          parseInt(feeFunderRemainder)
+        )
+      } else {
+        txFee += feeFunderRemainder.toNumber()
+      }
+    } else {
+      // Send the BCH change back to the wallet, if any
+      creatorRemainder = totalInput.minus(totalOutput.plus(txFee))
+      if (creatorRemainder.isGreaterThanOrEqualTo(this.dustLimit)) {
+        transactionBuilder.addOutput(
+          bchjs.Address.toLegacyAddress(changeAddress),
+          parseInt(creatorRemainder)
+        )
+      } else {
+        const creatorRemainderNum = creatorRemainder.toNumber()
+        if (creatorRemainderNum < 0) {
+          return {
+            fee: txFee,
+            success: false,
+            error: `not enough balance in creator (${creatorRemainder}) to cover the fee (${txFee})`
+          }
+        } else {
+          txFee += creatorRemainderNum
+        }
+      }
+    }
+
+    let combinedUtxos = bchUtxos.utxos
+    if (feeFunder !== undefined) {
+      combinedUtxos = bchUtxos.utxos.concat(feeFunderUtxos.utxos)
+    }
+
+    // Sign each token UTXO being consumed.
+    let redeemScript
+    for (let i = 0; i < keyPairs.length; i++) {
+      const utxo = combinedUtxos[i]
+      transactionBuilder.sign(
+        i,
+        keyPairs[i],
+        redeemScript,
+        transactionBuilder.hashTypes.SIGHASH_ALL,
+        parseInt(utxo.value)
+      )
+    }
+
+    const tx = transactionBuilder.build()
+    const hex = tx.toHex()
+
+    if (broadcast) {
+      try {
+        const response = await this.broadcastTransaction(hex)
+        return response.data
+      } catch (error) {
+        return error.response.data
+      }
+    } else {
+      return {
+        success: true,
+        transaction: hex,
+        fee: txFee
+      }
+    }
   }
 
 }

@@ -141,7 +141,7 @@ class SlpNft1Child {
       handle = sender.address
     }
 
-    if (recipient.indexOf('simpleledger') < 0) {
+    if (!recipient.startsWith('simpleledger')) {
       return {
         success: false,
         error: 'recipient should have an SLP address'
