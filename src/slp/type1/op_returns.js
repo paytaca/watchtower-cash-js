@@ -49,6 +49,18 @@ class OpReturnGenerator {
     }
   }
 
+  generateMintOpReturn(tokenUtxos, tokenQty) {
+    try {
+      const OP_RETURN = bchjs.SLP.TokenType1.generateMintOpReturn(
+        tokenUtxos,
+        tokenQty
+      )
+      return OP_RETURN
+    } catch (err) {
+      throw err
+    }
+  }
+
 }
 
 module.exports = OpReturnGenerator

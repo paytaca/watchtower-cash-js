@@ -15,13 +15,18 @@ class SlpType1 {
     this.dustLimit = 546
   }
 
-  async getSlpUtxos(handle, tokenId, rawTotalSendAmount) {
+  async getSlpUtxos(handle, tokenId, rawTotalSendAmount, baton = false) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?value=${rawTotalSendAmount}`)
+      resp = await this._api.get(
+        `utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?value=${rawTotalSendAmount}&baton=${baton}`
+      )
     } else {
-      resp = await this._api.get(`utxo/slp/${handle}/${tokenId}/?value=${rawTotalSendAmount}`)
+      resp = await this._api.get(
+        `utxo/slp/${handle}/${tokenId}/?value=${rawTotalSendAmount}&baton=${baton}`
+      )
     }
+
     let cumulativeAmount = new BigNumber(0)
     let tokenDecimals = 0
     let filteredUtxos = []
@@ -46,10 +51,11 @@ class SlpType1 {
     }
     cumulativeAmount = new BigNumber(0)
     const dustLimit = this.dustLimit
-    const finalUtxos = filteredUtxos.map(function (item) {
+    let finalUtxos = filteredUtxos.map(function (item) {
       const amount = new BigNumber(item.amount).times(10 ** item.decimals)
       cumulativeAmount = cumulativeAmount.plus(amount)
-      return {
+      const finalizedUtxoFormat = {
+        decimals = item.decimals,
         tokenId: item.tokenid,
         tx_hash: item.txid,
         tx_pos: item.vout,
@@ -58,7 +64,15 @@ class SlpType1 {
         wallet_index: item.wallet_index,
         address_path: item.address_path
       }
+
+      if (baton) {
+        // NOTE: temporary condition until WT backend's baton return data structure can be seen already
+        finalizedUtxoFormat.type = item.amount === 0 ? 'baton' : 'token'
+      }
+
+      return finalizedUtxoFormat
     })
+
     return {
       cumulativeAmount: cumulativeAmount,
       convertedSendAmount: new BigNumber(rawTotalSendAmount).times(10 ** tokenDecimals),
@@ -561,7 +575,7 @@ class SlpType1 {
           return {
             fee: txFee,
             success: false,
-            error: `not enough balance in creator (${creatorRemainder}) to cover the fee (${txFee})`
+            error: `not enough balance in fee funder (${creatorRemainder}) to cover the fee (${txFee})`
           }
         } else {
           txFee += creatorRemainderNum
@@ -577,6 +591,234 @@ class SlpType1 {
     // Sign each token UTXO being consumed.
     let redeemScript
     for (let i = 0; i < keyPairs.length; i++) {
+      const utxo = combinedUtxos[i]
+      transactionBuilder.sign(
+        i,
+        keyPairs[i],
+        redeemScript,
+        transactionBuilder.hashTypes.SIGHASH_ALL,
+        parseInt(utxo.value)
+      )
+    }
+
+    const tx = transactionBuilder.build()
+    const hex = tx.toHex()
+
+    if (broadcast) {
+      try {
+        const response = await this.broadcastTransaction(hex)
+        return response.data
+      } catch (error) {
+        return error.response.data
+      }
+    } else {
+      return {
+        success: true,
+        transaction: hex,
+        fee: txFee
+      }
+    }
+  }
+
+  async mint({
+    minter,
+    feeFunder,
+    tokenId,
+    quantity,
+    additionalMintRecipient,
+    mintBatonRecipient,
+    changeAddress,
+    broadcast,
+    passMintingBaton = true
+  }) {
+    if (quantity < 1) {
+      return {
+        success: false,
+        error: 'mint amount/quantity must be greater than or equal to 1'
+      }
+    }
+
+    let walletHash
+    if (minter.walletHash !== undefined) {
+      walletHash = minter.walletHash
+    }
+    if (broadcast === undefined) {
+      broadcast = true
+    }
+
+    let totalTokenSendAmounts = new BigNumber(quantity)
+    if (passMintingBaton) {
+      if (!mintBatonRecipient.startsWith('simpleledger')) {
+        return {
+          success: false,
+          error: 'mint baton recipient should have an SLP address'
+        }
+      }
+    }
+
+    let handle
+    if (walletHash) {
+      handle = 'wallet:' + walletHash
+    } else {
+      handle = minter.address
+    }
+
+    if (!additionalMintRecipient.startsWith('simpleledger')) {
+      return {
+        success: false,
+        error: 'additional mint recipient should have an SLP address'
+      }
+    }
+    
+    let slpUtxos = await this.getSlpUtxos(handle, tokenId, totalTokenSendAmounts, true)
+    if (slpUtxos.utxos.length === 0) {
+      return {
+        success: false,
+        error: 'no minting baton UTXO in the minter wallet'
+      }
+    }
+
+    const keyPairs = []
+
+    let transactionBuilder = new bchjs.TransactionBuilder()
+    let outputsCount = 0
+    let totalInputSats = new BigNumber(0)
+    let totalOutputSats = new BigNumber(0)
+    let totalInputTokens = new BigNumber(0)
+
+    for (let i = 0; i < slpUtxos.utxos.length; i++) {
+      transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
+      totalInputSats = totalInputSats.plus(slpUtxos.utxos[i].value)
+      totalInputTokens = totalInputTokens.plus(slpUtxos.utxos[i].amount)
+      let utxoKeyPair
+      if (walletHash) {
+        let addressPath
+        if (slpUtxos.utxos[i].address_path) {
+          addressPath = slpUtxos.utxos[i].address_path
+        } else {
+          addressPath = slpUtxos.utxos[i].wallet_index
+        }
+        const utxoPkWif = await this.retrievePrivateKey(
+          minter.mnemonic,
+          minter.derivationPath,
+          addressPath
+        )
+        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+      } else {
+        utxoKeyPair = bchjs.ECPair.fromWIF(minter.wif)
+      }
+      keyPairs.push(utxoKeyPair)
+    }
+
+    const slpMintData = slpOpRetGen.generateMintOpReturn(
+      slpUtxos.utxos,
+      quantity
+    )
+    transactionBuilder.addOutput(slpMintData, 0)
+    transactionBuilder.addOutput(
+      bchjs.SLP.Address.toLegacyAddress(additionalMintRecipient),
+      this.dustLimit
+    )
+    totalOutputSats = totalOutputSats.plus(this.dustLimit)
+    outputsCount += 2
+
+    if (passMintingBaton) {
+      transactionBuilder.addOutput(
+        bchjs.SLP.Address.toLegacyAddress(mintBatonRecipient),
+        this.dustLimit
+      )
+      totalOutputSats = totalOutputSats.plus(this.dustLimit)
+      outputsCount += 1
+    }
+
+    const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
+    outputsCount += 1  // Add extra for sending BCH change,if any
+
+    let byteCount = bchjs.BitcoinCash.getByteCount(
+      {
+        P2PKH: inputsCount
+      },
+      {
+        P2PKH: outputsCount
+      }
+    )
+    byteCount += slpMintData.length  // Account for SLP OP_RETURN data byte count
+    const feeRate = 1.2 // 1.2 sats/byte fee rate
+    let txFee = Math.ceil(byteCount * feeRate)
+    let feeFunderHandle
+    if (feeFunder.walletHash) {
+      feeFunderHandle = 'wallet:' + feeFunder.walletHash
+    } else {
+      feeFunderHandle = feeFunder.address
+    }
+
+    const bchUtxos = await this.getBchUtxos(feeFunderHandle, txFee)
+
+    if (bchUtxos.cumulativeValue < txFee) {
+      return {
+        fee: txFee,
+        success: false,
+        error: `not enough balance in fee funder (${bchUtxos.cumulativeValue}) to cover the fee (${txFee})`
+      }
+    }
+    if (bchUtxos.utxos.length > 2) {
+      return {
+        success: false,
+        error: 'UTXOs of the fee funder are thinly spread out which can cause inaccurate fee computation'
+      }
+    }
+
+    for (let i = 0; i < bchUtxos.utxos.length; i++) {
+      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
+      totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
+      let feeFunderutxoKeyPair
+      if (feeFunder.walletHash) {
+        let addressPath
+        if (bchUtxos.utxos[i].address_path) {
+          addressPath = bchUtxos.utxos[i].address_path
+        } else {
+          addressPath = bchUtxos.utxos[i].wallet_index
+        }
+        const utxoPkWif = await this.retrievePrivateKey(
+          feeFunder.mnemonic,
+          feeFunder.derivationPath,
+          addressPath
+        )
+        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+      } else {
+        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+      }
+      keyPairs.push(feeFunderutxoKeyPair)
+      if (!changeAddress) {
+        changeAddress = bchjs.ECPair.toCashAddress(feeFunderutxoKeyPair)
+      }
+    }
+
+    // Last output: send the BCH change back to the wallet.
+    const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
+    if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
+      transactionBuilder.addOutput(
+        bchjs.Address.toLegacyAddress(changeAddress),
+        parseInt(remainderSats)
+      )
+    } else {
+      const remainderSatsNum = remainderSats.toNumber()
+      if (remainderSatsNum < 0) {
+        return {
+          fee: txFee,
+          success: false,
+          error: `not enough balance in fee funder (${remainderSats}) to cover the fee (${txFee})`
+        }
+      } else {
+        txFee += remainderSatsNum
+      }
+    }
+
+    const combinedUtxos = slpUtxos.utxos.concat(bchUtxos.utxos)
+
+    // Sign each token UTXO being consumed.
+    let redeemScript
+    for (let i = 0; i < combinedUtxos.length; i++) {
       const utxo = combinedUtxos[i]
       transactionBuilder.sign(
         i,
