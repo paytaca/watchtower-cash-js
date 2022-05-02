@@ -41,10 +41,10 @@ async function execute () {
 
   // Subscribe
   const subscribeData = {
-      address: address,
-      projectId: projectId,
-      walletHash: walletHash,
-      walletIndex: walletIndex
+    address: address,
+    projectId: projectId,
+    walletHash: walletHash,
+    walletIndex: walletIndex
   }
   watchtower.subscribe(subscribeData).then(function (result) {
     console.log(result)
