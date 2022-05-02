@@ -15,7 +15,7 @@ class SlpType1 {
     this.dustLimit = 546
   }
 
-  async getSlpUtxos(handle, tokenId, rawTotalSendAmount, baton = false) {
+  async getSlpUtxos(handle, tokenId, rawTotalSendAmount, baton = false, burn = false) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
       resp = await this._api.get(
@@ -49,25 +49,27 @@ class SlpType1 {
         break
       }
     }
+    const vm = this
     cumulativeAmount = new BigNumber(0)
-    const dustLimit = this.dustLimit
     let finalUtxos = filteredUtxos.map(function (item) {
       const amount = new BigNumber(item.amount).times(10 ** item.decimals)
       cumulativeAmount = cumulativeAmount.plus(amount)
       const finalizedUtxoFormat = {
-        decimals = item.decimals,
+        decimals: item.decimals,
         tokenId: item.tokenid,
         tx_hash: item.txid,
         tx_pos: item.vout,
+        // NOTE: temporary condition until WT backend's baton return data structure can be seen already
+        type: item.amount === 0 ? 'baton' : 'token',
         amount: amount,
-        value: dustLimit,
+        value: vm.dustLimit,
         wallet_index: item.wallet_index,
         address_path: item.address_path
       }
 
-      if (baton) {
-        // NOTE: temporary condition until WT backend's baton return data structure can be seen already
-        finalizedUtxoFormat.type = item.amount === 0 ? 'baton' : 'token'
+      if (burn) {
+        finalizedUtxoFormat.qtyStr = String(item.amount)
+        finalizedUtxoFormat.tokenQty = item.amount
       }
 
       return finalizedUtxoFormat
@@ -124,7 +126,15 @@ class SlpType1 {
     return resp
   }
 
-  async send({ sender, feeFunder, tokenId, recipients, changeAddresses, broadcast }) {
+  async send({
+    sender,
+    feeFunder,
+    tokenId,
+    recipients,
+    changeAddresses,
+    broadcast,
+    burn = false
+  }) {
     let walletHash
     if (sender.walletHash !== undefined) {
       walletHash = sender.walletHash
@@ -161,7 +171,13 @@ class SlpType1 {
       }
     }
     
-    const slpUtxos = await this.getSlpUtxos(handle, tokenId, totalTokenSendAmounts)
+    const slpUtxos = await this.getSlpUtxos(
+      handle,
+      tokenId,
+      totalTokenSendAmounts,
+      false,
+      burn
+    )
     try {
       if (slpUtxos.convertedSendAmount.isGreaterThan(slpUtxos.cumulativeAmount)) {
         return {
@@ -219,22 +235,34 @@ class SlpType1 {
     if (tokenRemainder.isGreaterThan(0)) {
       sendAmountsArray.push(tokenRemainder)
     }
-    const slpSendData = slpOpRetGen.generateSendOpReturn(
-      {
-        tokenId: tokenId,
-        sendAmounts: sendAmountsArray
-      }
-    )
-    transactionBuilder.addOutput(slpSendData, 0)
+
+    let slpOpRetData
+    if (burn) {
+      let quantity = sendAmountsArray.reduce((a, b) => a.plus(b))
+      quantity = Number(quantity / (10 ** slpUtxos.utxos[0].decimals))
+      slpOpRetData = slpOpRetGen.generateBurnOpReturn(
+        slpUtxos.utxos,
+        quantity
+      )
+    } else {
+      slpOpRetData = slpOpRetGen.generateSendOpReturn(
+        {
+          tokenId: tokenId,
+          sendAmounts: sendAmountsArray
+        }
+      )
+    }
+    transactionBuilder.addOutput(slpOpRetData, 0)
     outputsCount += 1
-    
+
+    const vm = this
     recipients.map(function (recipient) {
       transactionBuilder.addOutput(
         bchjs.SLP.Address.toLegacyAddress(recipient.address),
-        this.dustLimit
+        vm.dustLimit
       )
       outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(this.dustLimit)
+      totalOutputSats = totalOutputSats.plus(vm.dustLimit)
     })
 
     if (tokenRemainder.isGreaterThan(0)) {
@@ -257,7 +285,7 @@ class SlpType1 {
         P2PKH: outputsCount
       }
     )
-    byteCount += slpSendData.length  // Account for SLP OP_RETURN data byte count
+    byteCount += slpOpRetData.length  // Account for SLP OP_RETURN data byte count
     const feeRate = 1.2 // 1.2 sats/byte fee rate
     let txFee = Math.ceil(byteCount * feeRate)
     let feeFunderHandle
