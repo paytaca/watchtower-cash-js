@@ -59,8 +59,7 @@ class SlpType1 {
         tokenId: item.tokenid,
         tx_hash: item.txid,
         tx_pos: item.vout,
-        // NOTE: temporary condition until WT backend's baton return data structure can be seen already
-        type: item.amount === 0 ? 'baton' : 'token',
+        type: baton ? 'baton' : 'token',
         amount: amount,
         value: vm.dustLimit,
         wallet_index: item.wallet_index,
