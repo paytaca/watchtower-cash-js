@@ -32,6 +32,25 @@ class OpReturnGenerator {
     }
   }
 
+  async generateGroupCreateOpReturn (fixedSupply, name, ticker, documentUrl, initialQty) {
+    try {
+      const config = {
+        name,
+        ticker,
+        documentUrl,
+        initialQty
+      }
+      if (!fixedSupply) {
+        config.mintBatonVout = 2
+      }
+
+      const OP_RETURN = await bchjs.SLP.NFT1.newNFTGroupOpReturn(config)
+      return OP_RETURN
+    } catch (err) {
+      throw err
+    }
+  }
+
 }
 
 module.exports = OpReturnGenerator

@@ -3,6 +3,9 @@ const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
 const OpReturnGenerator = require('./op_returns')
+const SlpType1 = require('../../type1/index')
+
+const nftOpRetGen = new OpReturnGenerator()
 
 class SlpNft1Parent {
 
@@ -11,11 +14,12 @@ class SlpNft1Parent {
       baseURL: apiBaseUrl,
       timeout: 60 * 1000  // 1 minute
     })
+    this.baseUrl = apiBaseUrl
     this.dustLimit = 546
     this.tokenType = 129
   }
 
-  async getNftUtxos(handle, tokenId, rawTotalSendAmount, isCreatingChildNft) {
+  async getNftUtxos (handle, tokenId, rawTotalSendAmount, isCreatingChildNft) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
       resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?&value=${rawTotalSendAmount}`)
@@ -265,8 +269,7 @@ class SlpNft1Parent {
       inputsCount += 1
     }
     inputsCount += 1 // fee funder input
- 
-    const nftOpRetGen = new OpReturnGenerator()
+
     let hasNftGroupChange = false
     let nftOpReturn
 
@@ -402,6 +405,36 @@ class SlpNft1Parent {
         fee: txFee
       }
     }
+  }
+
+  async create ({
+    creator,
+    feeFunder,
+    initialMintRecipient,
+    mintBatonRecipient,
+    changeAddress,
+    broadcast,
+    name,
+    ticker,
+    initialQty,
+    docUrl = '',
+    fixedSupply = false
+  }) {
+    const slpType1 = new SlpType1(this.baseUrl)
+    return await slpType1.create({
+      creator,
+      feeFunder,
+      initialMintRecipient,
+      mintBatonRecipient,
+      changeAddress,
+      broadcast,
+      name,
+      ticker,
+      initialQty,
+      docUrl,
+      fixedSupply,
+      isNftParent: true
+    })
   }
 
 }
