@@ -24,7 +24,7 @@ const mintBatonData = {
   broadcast: true  // true by default
 }
 
-const mintChildData = {
+const createChildNftData = {
   sender: {
     address: 'simpleledger:qqz95enwd6qdcy5wnf05hp590sjjknwfuq8sjhpv6x',
     wif: 'XXX'  // <-- private key of the sender address
@@ -63,8 +63,8 @@ watchtower.SLP.NFT1.Parent.generateMintingBatonUtxo(mintBatonData).then(result =
     // or if broadcast is set to false, you can just get the raw transaction hex
     console.log(result.transaction)
     
-    watchtower.SLP.NFT1.Parent.mintChildNft(mintChildData).then(result => {
-      console.log('MINT Child NFT result')
+    watchtower.SLP.NFT1.Parent.createChildNft(createChildNftData).then(result => {
+      console.log('Create Child NFT result')
 
       if (result.success) {
         // Your logic here when send transaction is successful

@@ -15,7 +15,7 @@ class SlpNft1Parent {
     this.tokenType = 129
   }
 
-  async getNftUtxos(handle, tokenId, rawTotalSendAmount, isMintingChildNft) {
+  async getNftUtxos(handle, tokenId, rawTotalSendAmount, isCreatingChildNft) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
       resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${tokenId}/?&value=${rawTotalSendAmount}`)
@@ -26,7 +26,7 @@ class SlpNft1Parent {
     let tokenDecimals = 0
     let filteredUtxos = []
     const utxos = resp.data.utxos.filter(u => {
-      if (isMintingChildNft) {
+      if (isCreatingChildNft) {
         return u.token_type === this.tokenType && u.amount === 1
       }
       return u.token_type === this.tokenType
@@ -156,7 +156,7 @@ class SlpNft1Parent {
     })
   }
 
-  async mintChildNft ({
+  async createChildNft ({
     sender,
     feeFunder,
     groupTokenId,
