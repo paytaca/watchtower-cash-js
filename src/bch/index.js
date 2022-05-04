@@ -74,7 +74,7 @@ class BCH {
     let totalSendAmount = 0
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      if (recipient.address.indexOf('bitcoincash') < 0) {
+      if (!recipient.address.startsWith('bitcoincash')) {
         return {
           success: false,
           error: 'recipient should have a BCH address'
