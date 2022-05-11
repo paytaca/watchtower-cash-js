@@ -51,6 +51,15 @@ class OpReturnGenerator {
     }
   }
 
+  generateGroupMintOpReturn (utxos, qty) {
+    try {
+      const OP_RETURN = bchjs.SLP.NFT1.mintNFTGroupOpReturn(utxos, qty)
+      return OP_RETURN
+    } catch (err) {
+      throw err
+    }
+  }
+
 }
 
 module.exports = OpReturnGenerator
