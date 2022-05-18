@@ -261,8 +261,8 @@ class SlpNft1Parent {
         sender.mnemonic,
         sender.derivationPath,
         addressPath
-        )
-        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+      )
+      utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
     } else {
       utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
     }
@@ -283,7 +283,7 @@ class SlpNft1Parent {
     } else {
       const totalTokenSendAmountTemp = Number(totalTokenSendAmount)
       hasNftGroupChange = nftUtxos.utxos[0].tokenQty !== totalTokenSendAmountTemp
-      nftOpReturn = await nftOpRetGen.generateGroupSendOpReturn(nftUtxos.utxos)
+      nftOpReturn = await nftOpRetGen.generateGroupSendOpReturn(nftUtxos.utxos, 1)
     }
 
     transactionBuilder.addOutput(nftOpReturn, 0)
@@ -631,6 +631,249 @@ class SlpNft1Parent {
           fee: txFee,
           success: false,
           error: `not enough balance in fee funder (${remainderSats}) to cover the fee (${txFee})`
+        }
+      } else {
+        txFee += remainderSatsNum
+      }
+    }
+
+    const combinedUtxos = nftUtxos.utxos.concat(bchUtxos.utxos)
+
+    // Sign each token UTXO being consumed.
+    let redeemScript
+    for (let i = 0; i < combinedUtxos.length; i++) {
+      const utxo = combinedUtxos[i]
+      transactionBuilder.sign(
+        i,
+        keyPairs[i],
+        redeemScript,
+        transactionBuilder.hashTypes.SIGHASH_ALL,
+        parseInt(utxo.value)
+      )
+    }
+
+    const tx = transactionBuilder.build()
+    const hex = tx.toHex()
+
+    if (broadcast) {
+      try {
+        const response = await this.broadcastTransaction(hex)
+        return response.data
+      } catch (error) {
+        return error.response.data
+      }
+    } else {
+      return {
+        success: true,
+        transaction: hex,
+        fee: txFee
+      }
+    }
+  }
+
+  async send ({
+    sender,
+    feeFunder,
+    tokenId,
+    recipients,
+    changeAddresses,
+    broadcast
+  }) {
+    let walletHash
+    if (sender.walletHash !== undefined) {
+      walletHash = sender.walletHash
+    }
+    if (broadcast === undefined) {
+      broadcast = true
+    }
+    if (!changeAddresses) {
+      changeAddresses = {
+        slp: null,
+        bch: null
+      }
+    }
+
+    let totalTokenSendAmounts = new BigNumber(0)
+    recipients.map(function (recipient) {
+      totalTokenSendAmounts = totalTokenSendAmounts.plus(recipient.amount)
+      return recipient.amount
+    })
+
+    let handle
+    if (walletHash) {
+      handle = 'wallet:' + walletHash
+    } else {
+      handle = sender.address
+    }
+    for (let i = 0; i < recipients.length; i++) {
+      const recipient = recipients[i]
+      if (!recipient.address.startsWith('simpleledger')) {
+        return {
+          success: false,
+          error: 'recipient should have an SLP address'
+        }
+      }
+    }
+    
+    const nftUtxos = await this.getNftUtxos(handle, groupTokenId, totalTokenSendAmount, false)
+    try {
+      if (nftUtxos.convertedSendAmount.isGreaterThan(nftUtxos.cumulativeAmount)) {
+        return {
+          success: false,
+          error: `not enough balance in sender (${nftUtxos.cumulativeAmount}) to cover the send amount (${nftUtxos.convertedSendAmount})`
+        }
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: 'not enough balance in sender to cover the send amount'
+      }
+    }
+
+    const keyPairs = []
+
+    let transactionBuilder = new bchjs.TransactionBuilder()
+    let outputsCount = 0
+    let totalInputSats = new BigNumber(0)
+    let totalOutputSats = new BigNumber(0)
+    let totalInputTokens = new BigNumber(0)
+
+    let sendAmountsArray = recipients.map(function (recipient) {
+      return new BigNumber(recipient.amount).times(10 ** nftUtxos.tokenDecimals)
+    })
+
+    for (let i = 0; i < nftUtxos.utxos.length; i++) {
+      transactionBuilder.addInput(nftUtxos.utxos[i].tx_hash, nftUtxos.utxos[i].tx_pos)
+      totalInputSats = totalInputSats.plus(nftUtxos.utxos[i].value)
+      totalInputTokens = totalInputTokens.plus(nftUtxos.utxos[i].amount)
+      let utxoKeyPair
+      if (walletHash) {
+        let addressPath
+        if (nftUtxos.utxos[i].address_path) {
+          addressPath = nftUtxos.utxos[i].address_path
+        } else {
+          addressPath = nftUtxos.utxos[i].wallet_index
+        }
+        const utxoPkWif = await this.retrievePrivateKey(
+          sender.mnemonic,
+          sender.derivationPath,
+          addressPath
+        )
+        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+      } else {
+        utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+      }
+      keyPairs.push(utxoKeyPair)
+      if (!changeAddresses.slp) {
+        changeAddresses.slp = bchjs.ECPair.toCashAddress(utxoKeyPair)
+      }
+    }
+
+    let tokenRemainder = totalInputTokens.minus(nftUtxos.convertedSendAmount)
+    if (tokenRemainder.isGreaterThan(0)) {
+      sendAmountsArray.push(tokenRemainder)
+    }
+
+    const nftOpRetData = nftOpRetGen.generateGroupSendOpReturn(nftUtxos.utxos, totalInputTokens)
+    transactionBuilder.addOutput(nftOpRetData, 0)
+    outputsCount += 1
+
+    const vm = this
+    recipients.map(function (recipient) {
+      transactionBuilder.addOutput(
+        bchjs.SLP.Address.toLegacyAddress(recipient.address),
+        vm.dustLimit
+      )
+      outputsCount += 1
+      totalOutputSats = totalOutputSats.plus(vm.dustLimit)
+    })
+
+    if (tokenRemainder.isGreaterThan(0)) {
+      transactionBuilder.addOutput(
+        bchjs.SLP.Address.toLegacyAddress(changeAddresses.slp),
+        this.dustLimit
+      )
+      outputsCount += 1
+      totalOutputSats = totalOutputSats.plus(this.dustLimit)
+    }
+
+    const inputsCount = nftUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
+    outputsCount += 1  // Add extra for sending BCH change,if any
+
+    let byteCount = bchjs.BitcoinCash.getByteCount(
+      {
+        P2PKH: inputsCount
+      },
+      {
+        P2PKH: outputsCount
+      }
+    )
+    byteCount += nftOpRetData.length  // Account for SLP OP_RETURN data byte count
+    const feeRate = 1.2 // 1.2 sats/byte fee rate
+    let txFee = Math.ceil(byteCount * feeRate)
+    let feeFunderHandle
+    if (feeFunder.walletHash) {
+      feeFunderHandle = 'wallet:' + feeFunder.walletHash
+    } else {
+      feeFunderHandle = feeFunder.address
+    }
+    const bchUtxos = await this.getBchUtxos(feeFunderHandle, txFee)
+
+    if (bchUtxos.cumulativeValue < txFee) {
+      return {
+        fee: txFee,
+        success: false,
+        error: `not enough balance in fee funder (${bchUtxos.cumulativeValue}) to cover the fee (${txFee})`
+      }
+    }
+    if (bchUtxos.utxos.length > 2) {
+      return {
+        success: false,
+        error: 'UTXOs of the fee funder are thinly spread out which can cause inaccurate fee computation'
+      }
+    }
+
+    for (let i = 0; i < bchUtxos.utxos.length; i++) {
+      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
+      totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
+      let feeFunderutxoKeyPair
+      if (feeFunder.walletHash) {
+        let addressPath
+        if (bchUtxos.utxos[i].address_path) {
+          addressPath = bchUtxos.utxos[i].address_path
+        } else {
+          addressPath = bchUtxos.utxos[i].wallet_index
+        }
+        const utxoPkWif = await this.retrievePrivateKey(
+          feeFunder.mnemonic,
+          feeFunder.derivationPath,
+          addressPath
+        )
+        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+      } else {
+        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+      }
+      keyPairs.push(feeFunderutxoKeyPair)
+      if (!changeAddresses.bch) {
+        changeAddresses.bch = bchjs.ECPair.toCashAddress(feeFunderutxoKeyPair)
+      }
+    }
+
+    // Last output: send the BCH change back to the wallet.
+    const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
+
+    if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
+      transactionBuilder.addOutput(
+        bchjs.Address.toLegacyAddress(changeAddresses.bch),
+        parseInt(remainderSats)
+      )
+    } else {
+      const remainderSatsNum = remainderSats.toNumber()
+      if (remainderSatsNum < 0) {
+        return {
+          fee: txFee,
+          success: false,
+          error: `not enough balance in sender (${remainderSats}) to cover the fee (${txFee})`
         }
       } else {
         txFee += remainderSatsNum
