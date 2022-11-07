@@ -13,6 +13,11 @@ class Wallet {
     return assets.data
   }
 
+  async scanUtxo (walletHash) {
+    const response = await this._api.get(`utxo/wallet/${walletHash}/scan`)
+    return response.data
+  }
+
   async getBalance ({ walletHash, tokenId }) {
     let balance
     if (tokenId) {
