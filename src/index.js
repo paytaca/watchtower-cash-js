@@ -24,7 +24,7 @@ class Watchtower {
     return true;
   }
 
-  async subscribe ({ address, addresses, projectId, walletHash, walletIndex, addressIndex, webhookUrl, pgpInfo }) {
+  async subscribe ({ address, addresses, projectId, walletHash, walletIndex, addressIndex, webhookUrl, chatIdentity }) {
     if (projectId === undefined) {
       return {
         success: false,
@@ -60,8 +60,8 @@ class Watchtower {
     if (webhookUrl) {
       payload['webhook_url'] = webhookUrl
     }
-    if (pgpInfo) {
-      payload['pgp_info'] = pgpInfo
+    if (chatIdentity) {
+      payload['chat_identity'] = chatIdentity
     }
     const url = _baseUrl + 'subscription/'
     try {
