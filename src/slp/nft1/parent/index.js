@@ -189,6 +189,17 @@ class SlpNft1Parent {
       docUrl
     })
   }
+
+  async findChildNftMintingBaton({
+    groupTokenId,
+    walletHash,
+    address,
+  }) {
+    const handle = walletHash ? `wallet:${walletHash}` : address
+    const totalTokenSendAmount = new BigNumber(1)
+    const nftUtxos = await this.getNftUtxos(handle, groupTokenId, totalTokenSendAmount, true)
+    return nftUtxos.utxos.find(utxo => utxo.tokenQty === 1)
+  }
   
   async createChildNftOrMintingBatonUtxo ({
     sender,
