@@ -37,11 +37,12 @@ class SlpNft1Parent {
       if (isCreatingChildNft) {
         return u.token_type === this.tokenType && u.amount === 1
       }
+      if (!u.amount || u.amount <= 0) return false
       return u.token_type === this.tokenType
     })
 
     if (utxos.length > 0) {
-      tokenDecimals = utxos[0].decimals
+      tokenDecimals = utxos[0].decimals || 0
     } else {
       return {
         cumulativeAmount: cumulativeAmount,
@@ -715,7 +716,7 @@ class SlpNft1Parent {
       }
     }
     
-    const nftUtxos = await this.getNftUtxos(handle, groupTokenId, totalTokenSendAmount, false)
+    const nftUtxos = await this.getNftUtxos(handle, tokenId, totalTokenSendAmounts, false)
     try {
       if (nftUtxos.convertedSendAmount.isGreaterThan(nftUtxos.cumulativeAmount)) {
         return {
@@ -745,7 +746,7 @@ class SlpNft1Parent {
     for (let i = 0; i < nftUtxos.utxos.length; i++) {
       transactionBuilder.addInput(nftUtxos.utxos[i].tx_hash, nftUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(nftUtxos.utxos[i].value)
-      totalInputTokens = totalInputTokens.plus(nftUtxos.utxos[i].amount)
+      totalInputTokens = totalInputTokens.plus(nftUtxos.utxos[i].tokenQty)
       let utxoKeyPair
       if (walletHash) {
         let addressPath
@@ -774,7 +775,7 @@ class SlpNft1Parent {
       sendAmountsArray.push(tokenRemainder)
     }
 
-    const nftOpRetData = nftOpRetGen.generateGroupSendOpReturn(nftUtxos.utxos, totalInputTokens)
+    const nftOpRetData = nftOpRetGen.generateGroupSendOpReturn(nftUtxos.utxos, ...sendAmountsArray)
     transactionBuilder.addOutput(nftOpRetData, 0)
     outputsCount += 1
 

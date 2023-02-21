@@ -23,9 +23,9 @@ class OpReturnGenerator {
     }
   }
 
-  generateGroupSendOpReturn (utxos, qty) {
+  generateGroupSendOpReturn (utxos, ...sendAmounts) {
     try {
-      const OP_RETURN = bchjs.SLP.NFT1.generateNFTGroupSendOpReturn(utxos, qty)
+      const OP_RETURN = bchjs.SLP.NFT1.generateNFTGroupSendOpReturn(utxos, ...sendAmounts)
       return OP_RETURN.script
     } catch (err) {
       throw err
