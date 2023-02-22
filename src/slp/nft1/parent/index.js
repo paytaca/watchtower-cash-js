@@ -37,6 +37,7 @@ class SlpNft1Parent {
       if (isCreatingChildNft) {
         return u.token_type === this.tokenType && u.amount === 1
       }
+      if (groupBaton) return u.token_type === this.tokenType && u.amount === 0
       if (!u.amount || u.amount <= 0) return false
       return u.token_type === this.tokenType
     })
@@ -504,7 +505,7 @@ class SlpNft1Parent {
       }
     }
     
-    let nftUtxos = await this.getNftUtxos(handle, tokenId, totalTokenSendAmounts, true, true)
+    let nftUtxos = await this.getNftUtxos(handle, tokenId, null, false, true)
 
     if (nftUtxos.utxos.length === 0) {
       return {
