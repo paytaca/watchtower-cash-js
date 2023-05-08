@@ -4,6 +4,8 @@ const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
 const OpReturnGenerator = require('./op_returns')
 const Address = require('../../address')
+const NftOpReturnGenerator = require('../nft1/parent/op_returns')
+
 const slpOpRetGen = new OpReturnGenerator()
  
 class SlpType1 {
@@ -17,7 +19,7 @@ class SlpType1 {
     this.dustLimit = 546
   }
 
-  async getSlpUtxos(handle, tokenId, rawTotalSendAmount, baton = false, burn = false) {
+  async getSlpUtxos (handle, tokenId, rawTotalSendAmount, baton = false, burn = false) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
       resp = await this._api.get(
@@ -115,19 +117,19 @@ class SlpType1 {
     }
   }
 
-  async retrievePrivateKey(mnemonic, derivationPath, addressPath) {
+  async retrievePrivateKey (mnemonic, derivationPath, addressPath) {
     const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
     const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
     const childNode = masterHDNode.derivePath(derivationPath + '/' + addressPath)
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async broadcastTransaction(txHex) {
+  async broadcastTransaction (txHex) {
     const resp = await this._api.post('broadcast/', { transaction: txHex })
     return resp
   }
 
-  async send({
+  async send ({
     sender,
     feeFunder,
     tokenId,
@@ -392,7 +394,7 @@ class SlpType1 {
     }
   }
 
-  async create({
+  async create ({
     creator,
     feeFunder,
     initialMintRecipient,
@@ -405,9 +407,9 @@ class SlpType1 {
     initialQty,
     docUrl = '',
     docHash = '',
-    fixedSupply = false
-  }) {
-    
+    fixedSupply = false,
+    isNftParent = false
+  }) {    
     if (fixedSupply) {
       if (initialQty < 1) {
         return {
@@ -503,15 +505,28 @@ class SlpType1 {
     }
 
     let inputsCount = bchUtxos.utxos.length
-    const slpCreateData = await slpOpRetGen.generateGenesisOpReturn(
-      fixedSupply,
-      name,
-      ticker,
-      decimals,
-      initialQty,
-      docUrl,
-      docHash
-    )
+    let slpCreateData
+
+    if (isNftParent) {
+      const nftOpRetGen = new NftOpReturnGenerator()
+      slpCreateData = await nftOpRetGen.generateGroupCreateOpReturn(
+        fixedSupply,
+        name,
+        ticker,
+        docUrl,
+        initialQty
+      )
+    } else {
+      slpCreateData = await slpOpRetGen.generateGenesisOpReturn(
+        fixedSupply,
+        name,
+        ticker,
+        decimals,
+        initialQty,
+        docUrl,
+        docHash
+      )
+    }
     transactionBuilder.addOutput(slpCreateData, 0)
     transactionBuilder.addOutput(
       bchjs.SLP.Address.toLegacyAddress(initialMintRecipient),
@@ -649,7 +664,7 @@ class SlpType1 {
     }
   }
 
-  async mint({
+  async mint ({
     minter,
     feeFunder,
     tokenId,

@@ -50,19 +50,19 @@ class BCH {
     }
   }
 
-  async broadcastTransaction(txHex) {
+  async broadcastTransaction (txHex) {
     const resp = await this._api.post('broadcast/', { transaction: txHex })
     return resp
   }
 
-  async retrievePrivateKey(mnemonic, derivationPath, addressPath) {
+  async retrievePrivateKey (mnemonic, derivationPath, addressPath) {
     const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
     const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
     const childNode = masterHDNode.derivePath(derivationPath + '/' + addressPath)
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async send({ sender, recipients, feeFunder, changeAddress, broadcast, data }) {
+  async send ({ sender, recipients, feeFunder, changeAddress, broadcast, data }) {
     let walletHash
     if (sender.walletHash !== undefined) {
       walletHash = sender.walletHash
