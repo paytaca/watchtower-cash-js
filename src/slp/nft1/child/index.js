@@ -3,10 +3,13 @@ const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
 const OpReturnGenerator = require('./op_returns')
+const Address = require('../../../address')
+
 
 class SlpNft1Child {
 
-  constructor (apiBaseUrl) {
+  constructor (apiBaseUrl, isChipnet) {
+    this.isChipnet = isChipnet
     this._api = axios.create({
       baseURL: apiBaseUrl,
       timeout: 60 * 1000  // 1 minute
@@ -141,10 +144,10 @@ class SlpNft1Child {
       handle = sender.address
     }
 
-    if (!recipient.startsWith('simpleledger')) {
+    if (!Address(recipient).isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
-        error: 'recipient should have an SLP address'
+        error: 'recipient should have a valid SLP address'
       }
     }
 

@@ -4,14 +4,18 @@ const Wallet = require('./wallet')
 const axios = require('axios')
 
 
-const _baseUrl = 'https://watchtower.cash/api/'
-
 class Watchtower {
 
-  constructor () {
-    this.BCH = new BCH(_baseUrl)
-    this.SLP = new SLP(_baseUrl)
-    this.Wallet = new Wallet(_baseUrl)
+  constructor (isChipnet = false) {
+    if (isChipnet) {
+      this._baseUrl = 'https://chipnet.watchtower.cash/api/'
+    } else {
+      this._baseUrl = 'https://watchtower.cash/api/'
+    }
+
+    this.BCH = new BCH(this._baseUrl, isChipnet)
+    this.SLP = new SLP(this._baseUrl, isChipnet)
+    this.Wallet = new Wallet(this._baseUrl, isChipnet)
   }
 
   _isUUID (uuid) {
@@ -63,7 +67,7 @@ class Watchtower {
     if (chatIdentity) {
       payload['chat_identity'] = chatIdentity
     }
-    const url = _baseUrl + 'subscription/'
+    const url = this._baseUrl + 'subscription/'
     try {
       const resp = await axios.post(url, payload)
       return resp.data

@@ -4,11 +4,11 @@ const SlpNft1Parent = require('./nft1/parent')
 
 class SLP {
 
-  constructor (apiBaseUrl) {
-    this.Type1 = new SlpType1(apiBaseUrl)
+  constructor (apiBaseUrl, isChipnet) {
+    this.Type1 = new SlpType1(apiBaseUrl, isChipnet)
     this.NFT1 = {
-      Parent: new SlpNft1Parent(apiBaseUrl),
-      Child: new SlpNft1Child(apiBaseUrl)
+      Parent: new SlpNft1Parent(apiBaseUrl, isChipnet),
+      Child: new SlpNft1Child(apiBaseUrl, isChipnet)
     }
   }
 

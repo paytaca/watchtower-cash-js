@@ -18,10 +18,12 @@ class Wallet {
     return response.data
   }
 
-  async getBalance ({ walletHash, tokenId }) {
+  async getBalance ({ walletHash, tokenId, txid, index }) {
     let balance
     if (tokenId) {
-      balance = await this._api.get(`balance/wallet/${walletHash}/${tokenId}/`)
+      let url = `balance/wallet/${walletHash}/${tokenId}/`
+      if (txid && index) url += `${txid}/${index}/`
+      balance = await this._api.get(url)
     } else {
       balance = await this._api.get(`balance/wallet/${walletHash}/`)
     }
