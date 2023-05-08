@@ -3,13 +3,15 @@ const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
 const OpReturnGenerator = require('./op_returns')
+const Address = require('../../address')
 const NftOpReturnGenerator = require('../nft1/parent/op_returns')
 
 const slpOpRetGen = new OpReturnGenerator()
  
 class SlpType1 {
 
-  constructor (apiBaseUrl) {
+  constructor (apiBaseUrl, isChipnet) {
+    this.isChipnet = isChipnet
     this._api = axios.create({
       baseURL: apiBaseUrl,
       timeout: 60 * 1000  // 1 minute
@@ -164,10 +166,10 @@ class SlpType1 {
     }
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      if (!recipient.address.startsWith('simpleledger')) {
+      if (!Address(recipient).isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
-          error: 'recipient should have an SLP address'
+          error: 'recipient should have a valid SLP address'
         }
       }
     }
@@ -436,18 +438,18 @@ class SlpType1 {
     let totalSendAmountSats = this.dustLimit
     if (!fixedSupply) {
       totalSendAmountSats *= 2
-      if (!mintBatonRecipient.startsWith('simpleledger')) {
+      if (!Address(mintBatonRecipient).isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
-          error: 'mint baton recipient should have an SLP address'
+          error: 'mint baton recipient should have a valid SLP address'
         }
       }
     }
 
-    if (!initialMintRecipient.startsWith('simpleledger')) {
+    if (!Address(initialMintRecipient).isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
-        error: 'initial mint recipient should be an SLP address'
+        error: 'initial mint recipient should be a valid SLP address'
       }
     }
 
@@ -690,10 +692,10 @@ class SlpType1 {
 
     let totalTokenSendAmounts = new BigNumber(quantity)
     if (passMintingBaton) {
-      if (!mintBatonRecipient.startsWith('simpleledger')) {
+      if (!Address(mintBatonRecipient).isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
-          error: 'mint baton recipient should have an SLP address'
+          error: 'mint baton recipient should have a valid SLP address'
         }
       }
     }
@@ -705,7 +707,7 @@ class SlpType1 {
       handle = minter.address
     }
 
-    if (!additionalMintRecipient.startsWith('simpleledger')) {
+    if (!Address(additionalMintRecipient).isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
         error: 'additional mint recipient should have an SLP address'

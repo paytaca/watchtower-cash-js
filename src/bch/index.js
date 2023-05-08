@@ -2,12 +2,13 @@ const axios = require('axios')
 const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
+const Address = require('../address')
 const OpReturnGenerator = require('./op_returns')
 
 
 class BCH {
 
-  constructor (apiBaseUrl) {
+  constructor (apiBaseUrl, isChipnet) {
     this._api = axios.create({
       baseURL: apiBaseUrl,
       timeout: 60 * 1000  // 1 minute
@@ -74,10 +75,10 @@ class BCH {
     let totalSendAmount = 0
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      if (!recipient.address.startsWith('bitcoincash')) {
+      if (!Address(recipient).isValidBCHAddress(this.isChipnet)) {
         return {
           success: false,
-          error: 'recipient should have a BCH address'
+          error: 'recipient should have a valid BCH address'
         }
       }
       totalSendAmount += recipient.amount
