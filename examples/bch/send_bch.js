@@ -1,4 +1,4 @@
-const Watchtower = require('../src')
+const Watchtower = require('../../src')
 
 const watchtower = new Watchtower()
 

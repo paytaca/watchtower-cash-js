@@ -1,4 +1,4 @@
-const Watchtower = require('../src')
+const Watchtower = require('../../src')
 const sha256 = require('js-sha256')
 const BCHJS = require('@psf/bch-js')
 
