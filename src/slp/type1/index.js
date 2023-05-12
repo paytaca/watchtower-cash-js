@@ -4,8 +4,6 @@ const bchjs = new BCHJS()
 const BigNumber = require('bignumber.js')
 const OpReturnGenerator = require('./op_returns')
 const Address = require('../../address')
-const NftOpReturnGenerator = require('../nft1/parent/op_returns')
-
 const slpOpRetGen = new OpReturnGenerator()
  
 class SlpType1 {
@@ -19,7 +17,7 @@ class SlpType1 {
     this.dustLimit = 546
   }
 
-  async getSlpUtxos (handle, tokenId, rawTotalSendAmount, baton = false, burn = false) {
+  async getSlpUtxos(handle, tokenId, rawTotalSendAmount, baton = false, burn = false) {
     let resp
     if (handle.indexOf('wallet:') > -1) {
       resp = await this._api.get(
@@ -117,19 +115,19 @@ class SlpType1 {
     }
   }
 
-  async retrievePrivateKey (mnemonic, derivationPath, addressPath) {
+  async retrievePrivateKey(mnemonic, derivationPath, addressPath) {
     const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
     const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
     const childNode = masterHDNode.derivePath(derivationPath + '/' + addressPath)
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async broadcastTransaction (txHex) {
+  async broadcastTransaction(txHex) {
     const resp = await this._api.post('broadcast/', { transaction: txHex })
     return resp
   }
 
-  async send ({
+  async send({
     sender,
     feeFunder,
     tokenId,
@@ -166,7 +164,8 @@ class SlpType1 {
     }
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      if (!Address(recipient).isValidSLPAddress(this.isChipnet)) {
+      const addressObj = new Address(recipient)
+      if (!addressObj.isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
           error: 'recipient should have a valid SLP address'
@@ -394,7 +393,7 @@ class SlpType1 {
     }
   }
 
-  async create ({
+  async create({
     creator,
     feeFunder,
     initialMintRecipient,
@@ -407,9 +406,9 @@ class SlpType1 {
     initialQty,
     docUrl = '',
     docHash = '',
-    fixedSupply = false,
-    isNftParent = false
-  }) {    
+    fixedSupply = false
+  }) {
+    
     if (fixedSupply) {
       if (initialQty < 1) {
         return {
@@ -438,15 +437,17 @@ class SlpType1 {
     let totalSendAmountSats = this.dustLimit
     if (!fixedSupply) {
       totalSendAmountSats *= 2
-      if (!Address(mintBatonRecipient).isValidSLPAddress(this.isChipnet)) {
+      const addressObj = new Address(mintBatonRecipient)
+      if !addressObj.isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
           error: 'mint baton recipient should have a valid SLP address'
         }
       }
     }
-
-    if (!Address(initialMintRecipient).isValidSLPAddress(this.isChipnet)) {
+    
+    const addressObj = new Address(initialMintRecipient)
+    if (!addressObj.isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
         error: 'initial mint recipient should be a valid SLP address'
@@ -505,28 +506,15 @@ class SlpType1 {
     }
 
     let inputsCount = bchUtxos.utxos.length
-    let slpCreateData
-
-    if (isNftParent) {
-      const nftOpRetGen = new NftOpReturnGenerator()
-      slpCreateData = await nftOpRetGen.generateGroupCreateOpReturn(
-        fixedSupply,
-        name,
-        ticker,
-        docUrl,
-        initialQty
-      )
-    } else {
-      slpCreateData = await slpOpRetGen.generateGenesisOpReturn(
-        fixedSupply,
-        name,
-        ticker,
-        decimals,
-        initialQty,
-        docUrl,
-        docHash
-      )
-    }
+    const slpCreateData = await slpOpRetGen.generateGenesisOpReturn(
+      fixedSupply,
+      name,
+      ticker,
+      decimals,
+      initialQty,
+      docUrl,
+      docHash
+    )
     transactionBuilder.addOutput(slpCreateData, 0)
     transactionBuilder.addOutput(
       bchjs.SLP.Address.toLegacyAddress(initialMintRecipient),
@@ -664,7 +652,7 @@ class SlpType1 {
     }
   }
 
-  async mint ({
+  async mint({
     minter,
     feeFunder,
     tokenId,
@@ -692,7 +680,8 @@ class SlpType1 {
 
     let totalTokenSendAmounts = new BigNumber(quantity)
     if (passMintingBaton) {
-      if (!Address(mintBatonRecipient).isValidSLPAddress(this.isChipnet)) {
+      const addressObj = new Address(mintBatonRecipient)
+      if (!addressObj.isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
           error: 'mint baton recipient should have a valid SLP address'
@@ -707,7 +696,8 @@ class SlpType1 {
       handle = minter.address
     }
 
-    if (!Address(additionalMintRecipient).isValidSLPAddress(this.isChipnet)) {
+    const addressObj = new Address(additionalMintRecipient)
+    if (!addressObj.isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
         error: 'additional mint recipient should have an SLP address'
