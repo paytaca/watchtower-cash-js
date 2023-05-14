@@ -9,6 +9,7 @@ const OpReturnGenerator = require('./op_returns')
 class BCH {
 
   constructor (apiBaseUrl, isChipnet) {
+    this.isChipnet = isChipnet
     this._api = axios.create({
       baseURL: apiBaseUrl,
       timeout: 60 * 1000  // 1 minute
