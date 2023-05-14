@@ -89,7 +89,7 @@ class SlpNft1Parent {
   async getGroupTokenBalance ({ groupTokenId, wallet }) {
     try {
       let resp
-      if (Address(wallet).isValidSLPAddress(this.isChipnet)) {
+      if (new Address(wallet).isValidSLPAddress(this.isChipnet)) {
         resp = await this._api.get(`balance/slp/${wallet}/${groupTokenId}/`)
       } else {
         resp = await this._api.get(`balance/wallet/${wallet}/${groupTokenId}/`)
@@ -233,7 +233,7 @@ class SlpNft1Parent {
       handle = sender.address
     }
 
-    if (!Address(recipient).isValidSLPAddress(this.isChipnet)) {
+    if (!new Address(recipient).isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
         error: 'recipient should have a valid SLP address'

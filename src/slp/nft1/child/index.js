@@ -144,7 +144,7 @@ class SlpNft1Child {
       handle = sender.address
     }
 
-    if (!Address(recipient).isValidSLPAddress(this.isChipnet)) {
+    if (!new Address(recipient).isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
         error: 'recipient should have a valid SLP address'

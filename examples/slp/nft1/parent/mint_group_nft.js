@@ -18,7 +18,7 @@ const data = {
   passMintingBaton: false // <-- set this to true if you want to mint more tokens in the future (true by default)
 }
 
-watchtower.SLP.NFT1.mint(data).then(res => {
+watchtower.SLP.NFT1.Parent.mint(data).then(res => {
   console.log(res)
 }).catch(err => {
   console.log(err)

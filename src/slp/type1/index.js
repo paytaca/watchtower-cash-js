@@ -166,7 +166,7 @@ class SlpType1 {
     }
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      if (!Address(recipient).isValidSLPAddress(this.isChipnet)) {
+      if (!new Address(recipient.address).isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
           error: 'recipient should have a valid SLP address'
@@ -438,7 +438,7 @@ class SlpType1 {
     let totalSendAmountSats = this.dustLimit
     if (!fixedSupply) {
       totalSendAmountSats *= 2
-      if (!Address(mintBatonRecipient).isValidSLPAddress(this.isChipnet)) {
+      if (!new Address(mintBatonRecipient).isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
           error: 'mint baton recipient should have a valid SLP address'
@@ -446,7 +446,7 @@ class SlpType1 {
       }
     }
 
-    if (!Address(initialMintRecipient).isValidSLPAddress(this.isChipnet)) {
+    if (!new Address(initialMintRecipient).isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
         error: 'initial mint recipient should be a valid SLP address'
@@ -692,7 +692,7 @@ class SlpType1 {
 
     let totalTokenSendAmounts = new BigNumber(quantity)
     if (passMintingBaton) {
-      if (!Address(mintBatonRecipient).isValidSLPAddress(this.isChipnet)) {
+      if (!new Address(mintBatonRecipient).isValidSLPAddress(this.isChipnet)) {
         return {
           success: false,
           error: 'mint baton recipient should have a valid SLP address'
@@ -707,7 +707,7 @@ class SlpType1 {
       handle = minter.address
     }
 
-    if (!Address(additionalMintRecipient).isValidSLPAddress(this.isChipnet)) {
+    if (!new Address(additionalMintRecipient).isValidSLPAddress(this.isChipnet)) {
       return {
         success: false,
         error: 'additional mint recipient should have an SLP address'

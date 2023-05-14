@@ -75,7 +75,7 @@ class BCH {
     let totalSendAmount = 0
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      if (!Address(recipient).isValidBCHAddress(this.isChipnet)) {
+      if (!new Address(recipient.address).isValidBCHAddress(this.isChipnet)) {
         return {
           success: false,
           error: 'recipient should have a valid BCH address'
