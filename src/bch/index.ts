@@ -2,8 +2,101 @@ import axios, { AxiosInstance, AxiosResponse } from "axios"
 import { Address } from "../address"
 import OpReturnGenerator from "./op_returns"
 
-import { TransactionTemplateFixed, authenticationTemplateP2pkhNonHd, authenticationTemplateToCompilerBCH, binToHex, cashAddressToLockingBytecode as _cashAddressToLockingBytecode, deriveHdPath, deriveHdPrivateNodeFromSeed, encodeTransaction, generateTransaction, hexToBin, importAuthenticationTemplate, decodePrivateKeyWif, secp256k1, hash160, encodeCashAddress, CashAddressType, CashAddressNetworkPrefix, TransactionGenerationError } from "@bitauth/libauth";
+import { TransactionTemplateFixed, authenticationTemplateP2pkhNonHd, authenticationTemplateToCompilerBCH, binToHex, cashAddressToLockingBytecode as _cashAddressToLockingBytecode, deriveHdPath, deriveHdPrivateNodeFromSeed, encodeTransaction, generateTransaction, hexToBin, importAuthenticationTemplate, decodePrivateKeyWif, secp256k1, hash160, encodeCashAddress, CashAddressType, CashAddressNetworkPrefix, TransactionGenerationError, readCompactSize, Output, encodePrivateKeyWif } from "@bitauth/libauth";
 import { mnemonicToSeedSync } from "bip39";
+
+export interface BchUtxo {
+  tx_hash: string;
+  tx_pos: number;
+  value: bigint;
+  wallet_index: string | null;
+  address_path: string;
+}
+
+export interface CashtokenUtxo extends BchUtxo {
+  amount: bigint
+  decimals: number;
+  tokenId: string,
+  capability: 'none' | 'minting' | 'mutable',
+  commitment: string,
+  type: 'baton' | 'token',
+}
+
+export interface GetBchUtxosResponse {
+  cumulativeValue: bigint;
+  utxos: BchUtxo[];
+}
+
+export interface GetCashtokensUtxosResponse {
+  cumulativeValue: bigint;
+  cumulativeTokenAmount: bigint;
+  tokenDecimals: number;
+  utxos: CashtokenUtxo[]
+}
+
+// some fields are optional, we can reflect that later
+export interface WatchTowerUtxoResponse {
+  valid: boolean;
+  address: string;
+  wallet: string;
+  minting_baton?: boolean;
+  utxos: Array<{
+      txid: string;
+      amount: number; // token amount
+      value: number; // denominated in satoshi
+      vout: number;
+      capability: 'none' | 'minting' | 'mutable' | null;
+      commitment: string | null; // hex string; example f00d
+      cashtoken_nft_details: Object | null;
+      token_type: number | null; // slp token type; not relevant for cashtokens
+      block: number;
+      tokenid: string;
+      token_name: string;
+      decimals: number;
+      token_ticker: string;
+      is_cashtoken: boolean;
+      wallet_index: null;
+      address_path: string; // example '0/0'
+    }>
+}
+
+export interface Token {
+  tokenId: string;
+  commitment?: string;
+  capability?: string;
+  amount?: bigint;
+}
+
+export interface Sender {
+  walletHash?: string;
+  mnemonic?: string;
+  derivationPath?: string;
+  address?: string;
+  wif?: string;
+}
+
+export interface Recipient {
+  address: string;
+  amount?: number; // denominated in BCH
+  tokenAmount?: bigint; // denominated in base units, not scaled by decimals
+}
+
+export interface SendRequest {
+  sender: Sender;
+  recipients: Array<Recipient>;
+  feeFunder?: Sender;
+  changeAddress: string;
+  broadcast?: boolean;
+  data?: string;
+  token?: Token
+}
+
+export interface SendResponse {
+  success: boolean;
+  transaction?: string;
+  fee?: bigint;
+  error?: string;
+}
 
 const cashAddressToLockingBytecode = (address: string) => {
   const result = _cashAddressToLockingBytecode(address);
@@ -37,32 +130,12 @@ export class BCH {
     this.dustLimit = 546
   }
 
-  async getBchUtxos (handle: string, value: number): Promise<{
-    cumulativeValue: bigint;
-    utxos: {
-        tx_hash: string;
-        tx_pos: number;
-        value: bigint;
-        wallet_index: string | null;
-        address_path: string;
-    }[]}> {
-    let resp: AxiosResponse<{
-      valid: boolean,
-      wallet: string,
-      utxos: Array<
-        {
-          txid: string,
-          value: number, // denominated in satoshi
-          vout: number,
-          block: number,
-          wallet_index: null,
-          address_path: string, // example '0/0'
-        }>
-    }>
+  async getBchUtxos (handle: string, value: number): Promise<GetBchUtxosResponse> {
+    let resp: AxiosResponse<WatchTowerUtxoResponse>;
     if (handle.indexOf('wallet:') > -1) {
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/?value=${value}`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/`)
     } else {
-      resp = await this._api.get(`utxo/bch/${handle}/?value=${value}`)
+      resp = await this._api.get(`utxo/bch/${handle}/`)
     }
     let cumulativeValue = 0n
     let inputBytes = 0
@@ -91,6 +164,67 @@ export class BCH {
     }
   }
 
+  async getCashtokensUtxos (handle: string, token: Token): Promise<GetCashtokensUtxosResponse> {
+    let resp: AxiosResponse<WatchTowerUtxoResponse>
+    if (handle.indexOf('wallet:') > -1) {
+      // resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${token.tokenId}/?is_cashtoken_nft=true&is_cashtoken=true&baton=${baton}`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/?is_cashtoken=true`)
+    } else {
+      // resp = await this._api.get(`utxo/ct/${handle}/${token.tokenId}/?is_cashtoken_nft=true&is_cashtoken=true&baton=${baton}`)
+      resp = await this._api.get(`utxo/ct/${handle}/?is_cashtoken=true`)
+    }
+
+    let cumulativeValue = 0n
+    let cumulativeTokenAmount = 0n
+    let tokenDecimals = 0
+    let filteredUtxos = []
+    const utxos = resp.data.utxos.filter(val => val.commitment === (token.commitment === undefined ? null : token.commitment) && val.capability === (token.capability || null) && val.tokenid === token.tokenId);
+    const requiredFtAmount = token.amount || 0n;
+    if (utxos.length > 0) {
+      tokenDecimals = utxos[0].decimals
+    } else {
+      return {
+        cumulativeValue: 0n,
+        cumulativeTokenAmount: 0n,
+        tokenDecimals,
+        utxos: []
+      }
+    }
+
+    for (let i = 0; i < utxos.length; i++) {
+      filteredUtxos.push(utxos[i])
+      cumulativeTokenAmount = cumulativeTokenAmount + BigInt(utxos[i].amount)
+      if (cumulativeTokenAmount > requiredFtAmount) {
+        break
+      }
+    }
+
+    const finalUtxos = filteredUtxos.map(function (item) {
+      cumulativeValue = cumulativeValue + BigInt(item.value)
+      const finalizedUtxoFormat = {
+        decimals: item.decimals,
+        tokenId: item.tokenid,
+        tx_hash: item.txid,
+        tx_pos: item.vout,
+        amount: BigInt(item.amount || 0),
+        value: BigInt(item.value),
+        wallet_index: item.wallet_index,
+        address_path: item.address_path,
+        capability: item.capability || undefined,
+        commitment: item.commitment !== null ? item.commitment : undefined,
+      } as any
+
+      return finalizedUtxoFormat
+    })
+
+    return {
+      cumulativeValue: cumulativeValue,
+      cumulativeTokenAmount: cumulativeTokenAmount,
+      tokenDecimals: tokenDecimals,
+      utxos: finalUtxos
+    }
+  }
+
   async broadcastTransaction (txHex: string): Promise<{
     txid: string
     success: boolean
@@ -102,11 +236,9 @@ export class BCH {
   }
 
   // Reworked to return private key instead of WIF
-  async retrievePrivateKey (mnemonic: string, derivationPath: string, addressPath: string): Promise<Uint8Array> {
-    // TODO: replace
-    // const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
+  retrievePrivateKey (mnemonic: string, derivationPath: string, addressPath: string): Uint8Array {
     const seedBuffer = mnemonicToSeedSync(mnemonic);
-    const masterHDNode = deriveHdPrivateNodeFromSeed(new Uint8Array(seedBuffer.buffer), true);
+    const masterHDNode = deriveHdPrivateNodeFromSeed(seedBuffer, true);
     const child = deriveHdPath(masterHDNode, `${derivationPath}/${addressPath}`);
     if (typeof child === "string") {
       throw new Error(child);
@@ -115,41 +247,28 @@ export class BCH {
     return child.privateKey;
   }
 
-  async send ({ sender, recipients, feeFunder, changeAddress, broadcast, data }) {
+  async send ({ sender, recipients, feeFunder, changeAddress, broadcast, data, token }: SendRequest): Promise<SendResponse> {
+    if (feeFunder && ((feeFunder.wif && feeFunder.wif === sender.wif) || (feeFunder.mnemonic && feeFunder.mnemonic === sender.mnemonic))) {
+      return {
+        success: false,
+        error: "Using `feeFunder` same as `sender` is not supported"
+      }
+    }
+
     let walletHash: string;
     if (sender.walletHash !== undefined) {
-      walletHash = sender.walletHash
+      walletHash = sender.walletHash!
     }
 
     if (broadcast == undefined) {
       broadcast = true
     }
 
-    let totalSendAmount = 0n
-    for (let i = 0; i < recipients.length; i++) {
-      const recipient = recipients[i]
-      if (!new Address(recipient.address).isValidBCHAddress(this.isChipnet)) {
-        return {
-          success: false,
-          error: 'recipient should have a valid BCH address'
-        }
-      }
-      totalSendAmount += BigInt(recipient.amount * 1e8)
-    }
-
-    const totalSendAmountSats = totalSendAmount
-    let handle
+    let handle: string;
     if (walletHash) {
       handle = 'wallet:' + walletHash
     } else {
-      handle = sender.address
-    }
-    const bchUtxos = await this.getBchUtxos(handle, Number(totalSendAmountSats))
-    if (bchUtxos.cumulativeValue < totalSendAmountSats) {
-      return {
-        success: false,
-        error: `not enough balance in sender (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
-      }
+      handle = sender.address!
     }
 
     const template = importAuthenticationTemplate(
@@ -171,26 +290,103 @@ export class BCH {
       version: 2,
     }
 
+    let combinedUtxos: CashtokenUtxo[] = [];
+    // we are sending cashtokens
+    if (token?.tokenId) {
+      let totalTokenSendAmount = 0n
+      recipients.forEach(function (recipient: Recipient) {
+        if (recipient.amount === undefined) {
+          recipient.tokenAmount = BigInt(recipient.tokenAmount || 0);
+        }
+        totalTokenSendAmount = totalTokenSendAmount + BigInt(recipient.tokenAmount || 0)
+      })
+
+      if (totalTokenSendAmount === 0n && token.commitment === undefined) {
+        return {
+          success: false,
+          error: 'can not send 0 fungible tokens'
+        }
+      }
+
+      const cashtokensUtxos = await this.getCashtokensUtxos(
+        handle,
+        {...token, amount: totalTokenSendAmount},
+      )
+
+      if (!cashtokensUtxos.utxos.length) {
+        return {
+          success: false,
+          error: 'no suitable utxos were found to spend token'
+        }
+      }
+
+      if (cashtokensUtxos.cumulativeTokenAmount < totalTokenSendAmount) {
+        return {
+          success: false,
+          error: 'not enough fungible token amount available to send'
+        }
+      }
+
+      // handle token change
+      const diff = cashtokensUtxos.cumulativeTokenAmount - totalTokenSendAmount;
+      if (diff > 0) {
+        recipients.push({
+          address: changeAddress,
+          amount: 0, // will be set on the next step,
+          tokenAmount: diff
+        });
+      }
+
+      recipients.forEach(function (recipient) {
+        recipient.amount = Number(cashtokensUtxos.utxos[0].value) / 1e8 // convert to BCH
+      })
+
+      combinedUtxos = cashtokensUtxos.utxos;
+    }
+
     let totalInput = 0n
     let totalOutput = 0n
 
-    for (let i = 0; i < bchUtxos.utxos.length; i++) {
-      totalInput = totalInput + bchUtxos.utxos[i].value
+    let totalSendAmount = 0n
+    for (let i = 0; i < recipients.length; i++) {
+      const recipient = recipients[i]
+      if (!new Address(recipient.address).isValidBCHAddress(this.isChipnet)) {
+        return {
+          success: false,
+          error: 'recipient should have a valid BCH address'
+        }
+      }
+      totalSendAmount += BigInt(Math.round(recipient.amount * 1e8))
+    }
+    const totalSendAmountSats = totalSendAmount
+
+    const bchUtxos = await this.getBchUtxos(handle, Number(totalSendAmountSats))
+    if (bchUtxos.cumulativeValue < totalSendAmountSats) {
+      return {
+        success: false,
+        error: `not enough balance in sender (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
+      }
+    }
+
+    combinedUtxos.push(...bchUtxos.utxos as any);
+
+    for (let i = 0; i < combinedUtxos.length; i++) {
+      totalInput = totalInput + combinedUtxos[i].value
 
       let inputPrivKey: Uint8Array;
       if (walletHash) {
         let addressPath: string;
-        if (bchUtxos.utxos[i].address_path) {
-          addressPath = bchUtxos.utxos[i].address_path
+        if (combinedUtxos[i].address_path) {
+          addressPath = combinedUtxos[i].address_path
         } else {
-          addressPath = bchUtxos.utxos[i].wallet_index
+          addressPath = combinedUtxos[i].wallet_index
         }
 
-        inputPrivKey = await this.retrievePrivateKey(
-            sender.mnemonic,
-            sender.derivationPath,
-            addressPath
-          )
+        inputPrivKey = this.retrievePrivateKey(
+          sender.mnemonic,
+          sender.derivationPath,
+          addressPath
+        )
       } else {
         const decodeResult = decodePrivateKeyWif(sender.wif);
         if (typeof decodeResult === "string") {
@@ -202,18 +398,27 @@ export class BCH {
         inputPrivKey = decodeResult.privateKey;
       }
 
+      const libauthToken = combinedUtxos[i].tokenId ? {
+        amount: combinedUtxos[i].amount,
+        category: hexToBin(combinedUtxos[i].tokenId),
+        nft: combinedUtxos[i].commitment !== undefined ? {
+          capability: combinedUtxos[i].capability,
+          commitment: hexToBin(combinedUtxos[i].commitment)
+        } : undefined
+      } as Output["token"] : undefined
+
       transaction.inputs.push({
-        outpointIndex: bchUtxos.utxos[i].tx_pos,
-        outpointTransactionHash: hexToBin(bchUtxos.utxos[i].tx_hash),
+        outpointIndex: combinedUtxos[i].tx_pos,
+        outpointTransactionHash: hexToBin(combinedUtxos[i].tx_hash),
         sequenceNumber: 0,
         unlockingBytecode: {
           compiler,
           data: {
             keys: { privateKeys: { key: inputPrivKey } },
           },
-          valueSatoshis: bchUtxos.utxos[i].value,
+          valueSatoshis: combinedUtxos[i].value,
           script: "unlock",
-          token: undefined,
+          token: libauthToken,
         },
       });
 
@@ -226,7 +431,7 @@ export class BCH {
       const dataOpRetGen = new OpReturnGenerator()
       const dataOpReturn = dataOpRetGen.generateDataOpReturn(data)
       transaction.outputs.push({
-        lockingBytecode: new Uint8Array(dataOpReturn.buffer),
+        lockingBytecode: dataOpReturn,
         valueSatoshis: 0n,
         token: undefined
       });
@@ -234,11 +439,21 @@ export class BCH {
 
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      const sendAmount = BigInt(recipient.amount * 1e8)
+      const sendAmount = BigInt(Math.round(recipient.amount * 1e8))
+
+      const libauthToken = recipients[i].tokenAmount !== undefined ? {
+        amount: recipients[i].tokenAmount,
+        category: hexToBin(token.tokenId),
+        nft: token.commitment !== undefined ? {
+          capability: token.capability,
+          commitment: hexToBin(token.commitment)
+        } : undefined
+      } as Output["token"] : undefined
+
       transaction.outputs.push({
         lockingBytecode: cashAddressToLockingBytecode(recipient.address).bytecode,
         valueSatoshis: sendAmount,
-        token: undefined, // TODO: CashTokens case here
+        token: libauthToken,
       });
 
       totalOutput = totalOutput + sendAmount
@@ -255,14 +470,31 @@ export class BCH {
     const estimatedTransactionBin = encodeTransaction(estimatedTransaction.transaction);
     const byteCount = estimatedTransactionBin.length;
 
-    const feeRate = 1.0 // 1.1 sats/byte fee rate
+    const feeRate = 1.1 // 1.1 sats/byte fee rate
 
     let txFee = BigInt(Math.ceil(byteCount * feeRate))
     let senderRemainder = 0n
 
-    let feeFunderUtxos
     if (feeFunder !== undefined) {
-      feeFunderUtxos = await this.getBchUtxos(feeFunder.address, Number(txFee))
+      let feeFunderUtxos: GetBchUtxosResponse;
+
+      let feeFunderPrivKey: Uint8Array;
+      if (feeFunder.derivationPath) {
+        feeFunderPrivKey = this.retrievePrivateKey(feeFunder.mnemonic, feeFunder.derivationPath, '0/0');
+        feeFunder.address = privateKeyToCashaddress(feeFunderPrivKey, this.isChipnet);
+        feeFunderUtxos = await this.getBchUtxos(`wallet:${feeFunder.walletHash}`, Number(txFee))
+      } else {
+        const decodeResult = decodePrivateKeyWif(feeFunder.wif);
+        if (typeof decodeResult === "string") {
+          return {
+            success: false,
+            error: decodeResult
+          }
+        }
+        feeFunderPrivKey = decodeResult.privateKey;
+        feeFunderUtxos = await this.getBchUtxos(feeFunder.address, Number(txFee))
+      }
+
       if (feeFunderUtxos.cumulativeValue < txFee) {
         return {
           fee: txFee,
@@ -292,6 +524,21 @@ export class BCH {
       for (let i = 0; i < feeFunderUtxos.utxos.length; i++) {
         totalInput = totalInput + feeFunderUtxos.utxos[i].value
         feeInputContrib = feeInputContrib + feeFunderUtxos.utxos[i].value
+
+        transaction.inputs.push({
+          outpointIndex: feeFunderUtxos.utxos[i].tx_pos,
+          outpointTransactionHash: hexToBin(feeFunderUtxos.utxos[i].tx_hash),
+          sequenceNumber: 0,
+          unlockingBytecode: {
+            compiler,
+            data: {
+              keys: { privateKeys: { key: feeFunderPrivKey } },
+            },
+            valueSatoshis: combinedUtxos[i].value,
+            script: "unlock",
+            token: undefined,
+          },
+        });
       }
 
       const feeFunderRemainder = feeInputContrib - txFee
@@ -311,6 +558,7 @@ export class BCH {
         transaction.outputs.push({
           lockingBytecode: cashAddressToLockingBytecode(changeAddress).bytecode,
           valueSatoshis: senderRemainder,
+          token: undefined, // no tokens in bch change
         })
       } else {
         const senderRemainderNum = senderRemainder

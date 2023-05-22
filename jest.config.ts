@@ -13,4 +13,6 @@ export default {
   testEnvironment: "node",
   verbose: true,
   maxConcurrency: 1,
+  collectCoverage: true,
+
 };
