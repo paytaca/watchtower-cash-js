@@ -1,8 +1,8 @@
 import { decodeTransaction as _decodeTransaction, binToHex, hexToBin, lockingBytecodeToCashAddress } from "@bitauth/libauth";
-import { BCH, SendRequest } from "../bch";
+import BCH, { SendRequest } from "../bch";
 import { setupAxiosMock } from "../test/axios";
 import { OpReturnData } from "mainnet-js"
-import { Wallet } from "../wallet";
+import Wallet from "../wallet";
 
 const decodeTransaction = (txHex: string) => {
   const transaction = _decodeTransaction(hexToBin(txHex));
@@ -314,8 +314,8 @@ describe('plain bch', () => {
     expect(transaction.inputs.length).toBe(1);
     expect(transaction.outputs.length).toBe(3);
     expect(transaction.outputs[0].satoshis).toBe(0);
-    expect(transaction.outputs[0].data.length).toBe(1);
-    expect(transaction.outputs[0].data[0]).toBe("hello");
+    expect(transaction.outputs[0].data!.length).toBe(1);
+    expect(transaction.outputs[0].data![0]).toBe("hello");
   })
 
   test('test failures', async () => {
@@ -485,8 +485,8 @@ describe('tokens', () => {
     const transaction = decodeTransaction(result.transaction!);
     expect(transaction.inputs.length).toBe(2);
     expect(transaction.outputs.length).toBe(2);
-    expect(transaction.outputs[0].token.commitment).toBe("");
-    expect(transaction.outputs[0].token.capability).toBe("minting");
+    expect(transaction.outputs[0].token!.commitment).toBe("");
+    expect(transaction.outputs[0].token!.capability).toBe("minting");
   })
 
   test('test sending nft tokens', async () => {
@@ -501,8 +501,8 @@ describe('tokens', () => {
     const transaction = decodeTransaction(result.transaction!);
     expect(transaction.inputs.length).toBe(2);
     expect(transaction.outputs.length).toBe(2);
-    expect(transaction.outputs[0].token.commitment).toBe("");
-    expect(transaction.outputs[0].token.capability).toBe("minting");
+    expect(transaction.outputs[0].token!.commitment).toBe("");
+    expect(transaction.outputs[0].token!.capability).toBe("minting");
   })
 
   test('test sending ft tokens', async () => {
@@ -565,76 +565,3 @@ describe('tokens', () => {
   })
 });
 
-test('Test Wallet', async () => {
-  const wallet = new Wallet("https://chipnet.watchtower.cash/api/");
-  const walletHash = "f77bb0c8b2063ba5cd61e8186c51705bab955983e994603dd8a73b2869450e32";
-  const address = "bchtest:zzy2xp7p0sxpkspgpmgud5y060uw8d5w6yzlq5eqel"
-  // const category = "9bd5b8f1ca10e4034ddd88d3541474a22c78f6d0ae3e2d54d3dfdbc62b34ac8d" // ft
-  const category = "17403493f012fd0916f3cb0c14aa385fccfda7415c4d201b2db2b12428e1ecc7" // nft
-
-  // const wallet = new Wallet("https://chipnet.watchtower.cash/api/");
-  const bch = new BCH("https://chipnet.watchtower.cash/api/", true);
-
-  // setupAxiosMock(`utxo`, {
-  //   valid: true,
-  //   wallet: 'f77bb0c8b2063ba5cd61e8186c51705bab955983e994603dd8a73b2869450e32',
-  //   utxos: [
-  //     {
-  //       txid: 'd45596de09fe1fff61d43c3cc4d8b5d5c1f89a03b37367e534e586b4e7f4d7f1',
-  //       value: 8745,
-  //       vout: 1,
-  //       block: 148842,
-  //       wallet_index: null,
-  //       address_path: '0/0'
-  //     },
-  //     {
-  //       txid: '9bd5b8f1ca10e4034ddd88d3541474a22c78f6d0ae3e2d54d3dfdbc62b34ac8d',
-  //       value: 9989780,
-  //       vout: 1,
-  //       block: 148842,
-  //       wallet_index: null,
-  //       address_path: '0/0'
-  //     }
-  //   ]
-  // }, wallet._api);
-
-  // console.log(await wallet.getBalance({
-  //   walletHash: "f77bb0c8b2063ba5cd61e8186c51705bab955983e994603dd8a73b2869450e32",
-  //   index: 0,
-  //   tokenId: '',
-  //   txid: ''
-  // }))
-
-  // console.log(JSON.stringify( await wallet.getHistory({
-  //   walletHash: "f77bb0c8b2063ba5cd61e8186c51705bab955983e994603dd8a73b2869450e32",
-  //   page: 0,
-  //   recordType: "all",
-  //   tokenId: null
-  // }), null, 2))
-
-  // console.log(await wallet.getTokens({ walletHash: walletHash, tokenType: "all" }))
-  // console.log((await wallet._api.get(`utxo/ct/${address}/${category}`)).data)
-  // console.log((await wallet._api.get(`utxo/ct/${walletHash}/${category}`)).data)
-  // console.log((await wallet._api.get(`utxo/ct/${address}`)).data)
-
-  setupAxiosMock(`utxo/wallet/${walletHash}/?is_cashtoken=true`, tokensResponse, bch._api);
-  // console.log((await bch._api.get(`utxo/wallet/${walletHash}//?is_cashtoken=true`)).data, `utxo/wallet/${walletHash}//?is_cashtoken=true`)
-  // const response = await bch.send(tokenSendRequest as any);
-  // console.log(response)
-
-  // const response = await bch.send(tokenNFTSendRequest as any);
-  // console.log(response)
-
-
-  // setupAxiosMock(`utxo/wallet/${walletHash}//?value=${9995032}`, utxosResponse, bch._api);
-  // console.log((await bch._api.get(`utxo/wallet/${walletHash}//?value=${9995032}`)).data)
-
-  // const response = await bch.send(sendRequest);
-  // const response = await bch.send(sendRequest);
-  // console.log(response)
-
-  // https://chipnet.watchtower.cash/api/utxo/wallet/f77bb0c8b2063ba5cd61e8186c51705bab955983e994603dd8a73b2869450e32/?value=9995032
-
-
-  // console.log((await wallet._api.get(`utxo`)).data)
-})

@@ -1,10 +1,16 @@
-const BCH = require('./bch')
-const SLP = require('./slp')
-const Wallet = require('./wallet')
-const axios = require('axios')
+import BCH from './bch/index.js';
+import SLP from './slp/index.js';
+import Wallet from './wallet/index.js';
+import Address from './address/index.js';
+import axios from 'axios';
 
+export { BCH, SLP, Wallet, Address };
 
-class Watchtower {
+export default class Watchtower {
+  _baseUrl: string
+  BCH: any
+  SLP: any
+  Wallet: any
 
   constructor (isChipnet = false) {
     if (isChipnet) {
@@ -15,14 +21,14 @@ class Watchtower {
 
     this.BCH = new BCH(this._baseUrl, isChipnet)
     this.SLP = new SLP(this._baseUrl, isChipnet)
-    this.Wallet = new Wallet(this._baseUrl, isChipnet)
+    this.Wallet = new Wallet(this._baseUrl)
   }
 
-  _isUUID (uuid) {
-    let s = "" + uuid;
+  _isUUID (uuid: string) {
+    const s = "" + uuid;
 
-    s = s.match('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-    if (s === null) {
+    const match = s.match('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (match === null) {
       return false;
     }
     return true;
@@ -76,5 +82,3 @@ class Watchtower {
     }
   }
 }
-
-module.exports = Watchtower

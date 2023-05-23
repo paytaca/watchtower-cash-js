@@ -1,8 +1,6 @@
-// const axios = require('axios')
-
 import axios, { AxiosInstance } from "axios";
 
-export class Wallet {
+export default class Wallet {
   public _api: AxiosInstance;
 
   constructor (apiBaseUrl) {

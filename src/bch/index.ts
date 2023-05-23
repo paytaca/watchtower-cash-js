@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse } from "axios"
-import { Address } from "../address"
-import OpReturnGenerator from "./op_returns"
+import Address from "../address/index.js"
+import OpReturnGenerator from "./op_returns.js"
 
 import { TransactionTemplateFixed, authenticationTemplateP2pkhNonHd, authenticationTemplateToCompilerBCH, binToHex, cashAddressToLockingBytecode as _cashAddressToLockingBytecode, deriveHdPath, deriveHdPrivateNodeFromSeed, encodeTransaction, generateTransaction, hexToBin, importAuthenticationTemplate, decodePrivateKeyWif, secp256k1, hash160, encodeCashAddress, CashAddressType, CashAddressNetworkPrefix, TransactionGenerationError, readCompactSize, Output, encodePrivateKeyWif } from "@bitauth/libauth";
 import { mnemonicToSeedSync } from "bip39";
@@ -85,7 +85,7 @@ export interface SendRequest {
   sender: Sender;
   recipients: Array<Recipient>;
   feeFunder?: Sender;
-  changeAddress: string;
+  changeAddress?: string;
   broadcast?: boolean;
   data?: string;
   token?: Token
@@ -116,7 +116,7 @@ const privateKeyToCashaddress = (privateKey: Uint8Array, isChipnet: boolean): st
   return encodeCashAddress(isChipnet ? CashAddressNetworkPrefix.testnet : CashAddressNetworkPrefix.mainnet, CashAddressType.p2pkh, pubKeyHash);
 }
 
-export class BCH {
+export default class BCH {
   isChipnet: boolean;
   _api: AxiosInstance;
   dustLimit: number;

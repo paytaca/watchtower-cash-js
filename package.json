@@ -2,7 +2,20 @@
   "name": "watchtower-cash-js",
   "version": "0.1.36",
   "description": "Library for building Javascript applications that integrate with Watchtower.cash",
-  "main": "src/index.js",
+  "type": "module",
+  "module": "dist/index.js",
+  "exports": {
+    "import": "./dist/index.js",
+    "require": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "package.json"
+  ],
   "scripts": {
     "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' jest",
     "build": "tsc"

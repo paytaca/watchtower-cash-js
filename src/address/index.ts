@@ -10,14 +10,25 @@ export enum SLPNetworkPrefix {
   regtest = "slpreg"
 }
 
-export class Address {
+export default class Address {
   constructor (public address) {
     this.address = address
   }
 
+  isSep20Address () {
+    if (typeof(this.address) !== "string") {
+      return false;
+    }
+    if (this.address.match(/^(0x)?[0-9a-fA-F]{40}$/)) {
+      return true;
+    }
+
+    return false;
+  }
+
   isLegacyAddress () {
     try {
-      return bchjs.Address.isLegacyAddress(this.toCashAddress())
+      return bchjs.Address.isLegacyAddress(this.address)
     } catch {
       return false;
     }

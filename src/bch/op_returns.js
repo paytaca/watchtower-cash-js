@@ -1,6 +1,5 @@
-const slpMdm = require('slp-mdm')
-const BigNumber = require('bignumber.js')
-
+import slpMdm from 'slp-mdm';
+import BigNumber from 'bignumber.js'
 
 const pushdata = (buf) => {
   if (buf.length === 0) {
@@ -23,7 +22,7 @@ const pushdata = (buf) => {
 };
 
 
-class OpReturnGenerator {
+export default class OpReturnGenerator {
 
   constructor () {}
 
@@ -43,4 +42,4 @@ class OpReturnGenerator {
   }
 }
 
-module.exports = OpReturnGenerator
+// module.exports = OpReturnGenerator

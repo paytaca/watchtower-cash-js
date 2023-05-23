@@ -1,4 +1,4 @@
-import { Address } from ".";
+import Address from "./index.js";
 import OldAddress from "./oldAddress";
 
 test('Test Address', () => {
