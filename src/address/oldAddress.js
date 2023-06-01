@@ -1,7 +1,7 @@
 const BCHJS = require("@psf/bch-js")
 const bchjs = new BCHJS()
 
-class Address {
+class OldAddress {
   constructor (address) {
     this.address = address
   }
@@ -61,4 +61,4 @@ class Address {
   }
 }
 
-module.exports = Address
+module.exports = OldAddress

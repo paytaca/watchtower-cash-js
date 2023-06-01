@@ -1,8 +1,8 @@
-const SlpType1 = require('./type1')
-const SlpNft1Child = require('./nft1/child')
-const SlpNft1Parent = require('./nft1/parent')
+import SlpType1 from './type1/index.js'
+import SlpNft1Child from './nft1/child/index.js'
+import SlpNft1Parent from './nft1/parent/index.js'
 
-class SLP {
+export default class SLP {
 
   constructor (apiBaseUrl, isChipnet) {
     this.Type1 = new SlpType1(apiBaseUrl, isChipnet)
@@ -13,5 +13,3 @@ class SLP {
   }
 
 }
-
-module.exports = SLP

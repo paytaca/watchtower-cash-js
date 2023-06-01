@@ -2,9 +2,23 @@
   "name": "watchtower-cash-js",
   "version": "0.1.36",
   "description": "Library for building Javascript applications that integrate with Watchtower.cash",
-  "main": "src/index.js",
+  "type": "module",
+  "module": "dist/index.js",
+  "exports": {
+    "import": "./dist/index.js",
+    "require": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "package.json"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' jest",
+    "build": "tsc"
   },
   "repository": {
     "type": "git",
@@ -17,8 +31,19 @@
   },
   "homepage": "https://github.com/paytaca/watchtower-cash-js#readme",
   "dependencies": {
+    "@bitauth/libauth": "^2.0.0-alpha.8",
     "@psf/bch-js": "^6.3.4",
     "axios": "^0.21.1",
+    "bip39": "^3.1.0",
     "js-sha256": "^0.9.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.1",
+    "jest": "^29.5.0",
+    "mainnet-js": "^1.1.23",
+    "ts-jest": "^29.1.0",
+    "ts-jest-resolver": "^2.0.1",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4"
   }
 }

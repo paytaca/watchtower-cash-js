@@ -1,7 +1,7 @@
-const BCHJS = require("@psf/bch-js")
+import BCHJS from "@psf/bch-js"
 const bchjs = new BCHJS()
 
-class OpReturnGenerator {
+export default class OpReturnGenerator {
 
   constructor () {}
 
@@ -61,5 +61,3 @@ class OpReturnGenerator {
   }
 
 }
-
-module.exports = OpReturnGenerator

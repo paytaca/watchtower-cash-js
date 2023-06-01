@@ -1,14 +1,14 @@
-const axios = require('axios')
-const BCHJS = require("@psf/bch-js")
-const bchjs = new BCHJS()
-const BigNumber = require('bignumber.js')
-const OpReturnGenerator = require('./op_returns')
-const Address = require('../../../address')
-const SlpType1 = require('../../type1/index')
+import axios from 'axios';
+import BCHJS from "@psf/bch-js";
+import BigNumber from 'bignumber.js';
+import OpReturnGenerator from './op_returns.js';
+import Address from '../../../address/index.js';
+import SlpType1 from '../../type1/index.js';
 
+const bchjs = new BCHJS()
 const nftOpRetGen = new OpReturnGenerator()
 
-class SlpNft1Parent {
+export default class SlpNft1Parent {
 
   constructor (apiBaseUrl, isChipnet) {
     this.isChipnet = isChipnet
@@ -930,5 +930,3 @@ class SlpNft1Parent {
   }
 
 }
-
-module.exports = SlpNft1Parent
