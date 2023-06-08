@@ -133,7 +133,15 @@ export default class Address {
   }
 
   isValidBCHAddress (isChipnet = false) {
-    return this.isCashAddress() || this.isTokenAddress();
+    if (isChipnet) {
+      if (this.isLegacyAddress()) {
+        return true;
+      } else {
+        return this.isCashAddress() || this.isTokenAddress();
+      }
+    } else {
+      return this.isCashAddress() || this.isTokenAddress();
+    }
     // const isBCHAddr = this.isCashAddress()
     // if (isChipnet)
     //   return isBCHAddr && this.isTestnetCashAddress()
@@ -155,6 +163,10 @@ export default class Address {
     type: CashAddressType;
 } {
     let result: any;
+    // If legacy address convert first to cash address
+    if (this.isLegacyAddress()) {
+      address = bchjs.Address.toCashAddress(address)
+    }
     // If the address has a prefix decode it as is
     if (address.includes(":")) {
       result = decodeCashAddressFormat(address);
