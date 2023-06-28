@@ -1,6 +1,6 @@
 {
   "name": "watchtower-cash-js",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "description": "Library for building Javascript applications that integrate with Watchtower.cash",
   "type": "module",
   "module": "dist/index.js",
