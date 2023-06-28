@@ -470,7 +470,7 @@ export default class BCH {
     const estimatedTransactionBin = encodeTransaction(estimatedTransaction.transaction);
     const byteCount = estimatedTransactionBin.length;
 
-    const feeRate = 1.1 // 1.1 sats/byte fee rate
+    const feeRate = 1.2 // 1.2 sats/byte fee rate
 
     let txFee = BigInt(Math.ceil(byteCount * feeRate))
     let senderRemainder = 0n
