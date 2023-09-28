@@ -8,6 +8,7 @@ import { mnemonicToSeedSync } from "bip39";
 export interface BchUtxo {
   tx_hash: string;
   tx_pos: number;
+  block?: number;
   value: bigint;
   wallet_index: string | null;
   address_path: string;
@@ -27,12 +28,20 @@ export interface GetBchUtxosResponse {
   utxos: BchUtxo[];
 }
 
+export interface GetBchUtxosOptions {
+  confirmed?: boolean, 
+}
+
 export interface GetCashtokensUtxosResponse {
   cumulativeValue: bigint;
   cumulativeTokenAmount: bigint;
   tokenDecimals: number;
   utxos: CashtokenUtxo[]
 }
+
+export interface GetCashtokensUtxosOptions extends GetBchUtxosOptions {  
+}
+
 
 // some fields are optional, we can reflect that later
 export interface WatchTowerUtxoResponse {
@@ -130,12 +139,16 @@ export default class BCH {
     this.dustLimit = 546
   }
 
-  async getBchUtxos (handle: string, value: number): Promise<GetBchUtxosResponse> {
+  async getBchUtxos (handle: string, value: number, opts?: GetBchUtxosOptions): Promise<GetBchUtxosResponse> {
     let resp: AxiosResponse<WatchTowerUtxoResponse>;
+    const params = {
+      confirmed: opts?.confirmed,
+    }
+
     if (handle.indexOf('wallet:') > -1) {
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/`, { params })
     } else {
-      resp = await this._api.get(`utxo/bch/${handle}/`)
+      resp = await this._api.get(`utxo/bch/${handle}/`, { params })
     }
     let cumulativeValue = 0n
     let inputBytes = 0
@@ -156,6 +169,7 @@ export default class BCH {
         return {
           tx_hash: item.txid,
           tx_pos: item.vout,
+          block: item.block,
           value: BigInt(item.value),
           wallet_index: item.wallet_index,
           address_path: item.address_path
@@ -164,14 +178,19 @@ export default class BCH {
     }
   }
 
-  async getCashtokensUtxos (handle: string, token: Token): Promise<GetCashtokensUtxosResponse> {
+  async getCashtokensUtxos (handle: string, token: Token, opts?: GetCashtokensUtxosOptions): Promise<GetCashtokensUtxosResponse> {
     let resp: AxiosResponse<WatchTowerUtxoResponse>
+    const params = {
+      is_cashtoken: true,
+      confirmed: opts?.confirmed,
+    }
+
     if (handle.indexOf('wallet:') > -1) {
       // resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/${token.tokenId}/?is_cashtoken_nft=true&is_cashtoken=true&baton=${baton}`)
-      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/?is_cashtoken=true`)
+      resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/`, { params })
     } else {
       // resp = await this._api.get(`utxo/ct/${handle}/${token.tokenId}/?is_cashtoken_nft=true&is_cashtoken=true&baton=${baton}`)
-      resp = await this._api.get(`utxo/ct/${handle}/?is_cashtoken=true`)
+      resp = await this._api.get(`utxo/ct/${handle}/`, { params })
     }
 
     let cumulativeValue = 0n
@@ -206,6 +225,7 @@ export default class BCH {
         tokenId: item.tokenid,
         tx_hash: item.txid,
         tx_pos: item.vout,
+        block: item.block,
         amount: BigInt(item.amount || 0),
         value: BigInt(item.value),
         wallet_index: item.wallet_index,
