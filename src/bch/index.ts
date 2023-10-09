@@ -29,7 +29,7 @@ export interface GetBchUtxosResponse {
 }
 
 export interface GetBchUtxosOptions {
-  confirmed?: boolean, 
+  confirmed?: boolean,
 }
 
 export interface GetCashtokensUtxosResponse {
@@ -39,7 +39,7 @@ export interface GetCashtokensUtxosResponse {
   utxos: CashtokenUtxo[]
 }
 
-export interface GetCashtokensUtxosOptions extends GetBchUtxosOptions {  
+export interface GetCashtokensUtxosOptions extends GetBchUtxosOptions {
 }
 
 
@@ -50,23 +50,23 @@ export interface WatchTowerUtxoResponse {
   wallet: string;
   minting_baton?: boolean;
   utxos: Array<{
-      txid: string;
-      amount: number; // token amount
-      value: number; // denominated in satoshi
-      vout: number;
-      capability: 'none' | 'minting' | 'mutable' | null;
-      commitment: string | null; // hex string; example f00d
-      cashtoken_nft_details: Object | null;
-      token_type: number | null; // slp token type; not relevant for cashtokens
-      block: number;
-      tokenid: string;
-      token_name: string;
-      decimals: number;
-      token_ticker: string;
-      is_cashtoken: boolean;
-      wallet_index: null;
-      address_path: string; // example '0/0'
-    }>
+    txid: string;
+    amount: number; // token amount
+    value: number; // denominated in satoshi
+    vout: number;
+    capability: 'none' | 'minting' | 'mutable' | null;
+    commitment: string | null; // hex string; example f00d
+    cashtoken_nft_details: Object | null;
+    token_type: number | null; // slp token type; not relevant for cashtokens
+    block: number;
+    tokenid: string;
+    token_name: string;
+    decimals: number;
+    token_ticker: string;
+    is_cashtoken: boolean;
+    wallet_index: null;
+    address_path: string; // example '0/0'
+  }>
 }
 
 export interface Token {
@@ -130,7 +130,7 @@ export default class BCH {
   _api: AxiosInstance;
   dustLimit: number;
 
-  constructor (apiBaseUrl, isChipnet) {
+  constructor(apiBaseUrl, isChipnet) {
     this.isChipnet = isChipnet
     this._api = axios.create({
       baseURL: apiBaseUrl,
@@ -139,7 +139,7 @@ export default class BCH {
     this.dustLimit = 546
   }
 
-  async getBchUtxos (handle: string, value: number, opts?: GetBchUtxosOptions): Promise<GetBchUtxosResponse> {
+  async getBchUtxos(handle: string, value: number, opts?: GetBchUtxosOptions): Promise<GetBchUtxosResponse> {
     let resp: AxiosResponse<WatchTowerUtxoResponse>;
     const params = {
       confirmed: opts?.confirmed,
@@ -178,7 +178,7 @@ export default class BCH {
     }
   }
 
-  async getCashtokensUtxos (handle: string, token: Token, opts?: GetCashtokensUtxosOptions): Promise<GetCashtokensUtxosResponse> {
+  async getCashtokensUtxos(handle: string, token: Token, opts?: GetCashtokensUtxosOptions): Promise<GetCashtokensUtxosResponse> {
     let resp: AxiosResponse<WatchTowerUtxoResponse>
     const params = {
       is_cashtoken: true,
@@ -245,7 +245,7 @@ export default class BCH {
     }
   }
 
-  async broadcastTransaction (txHex: string): Promise<{
+  async broadcastTransaction(txHex: string): Promise<{
     txid: string
     success: boolean
   } | {
@@ -256,7 +256,7 @@ export default class BCH {
   }
 
   // Reworked to return private key instead of WIF
-  retrievePrivateKey (mnemonic: string, derivationPath: string, addressPath: string): Uint8Array {
+  retrievePrivateKey(mnemonic: string, derivationPath: string, addressPath: string): Uint8Array {
     const seedBuffer = mnemonicToSeedSync(mnemonic);
     const masterHDNode = deriveHdPrivateNodeFromSeed(seedBuffer, true);
     const child = deriveHdPath(masterHDNode, `${derivationPath}/${addressPath}`);
@@ -267,7 +267,7 @@ export default class BCH {
     return child.privateKey;
   }
 
-  async send ({ sender, recipients, feeFunder, changeAddress, broadcast, data, token }: SendRequest): Promise<SendResponse> {
+  async send({ sender, recipients, feeFunder, changeAddress, broadcast, data, token }: SendRequest): Promise<SendResponse> {
     if (feeFunder && ((feeFunder.wif && feeFunder.wif === sender.wif) || (feeFunder.mnemonic && feeFunder.mnemonic === sender.mnemonic))) {
       return {
         success: false,
@@ -330,7 +330,7 @@ export default class BCH {
 
       const cashtokensUtxos = await this.getCashtokensUtxos(
         handle,
-        {...token, amount: totalTokenSendAmount},
+        { ...token, amount: totalTokenSendAmount },
       )
 
       if (!cashtokensUtxos.utxos.length) {
@@ -358,7 +358,9 @@ export default class BCH {
       }
 
       recipients.forEach(function (recipient) {
-        recipient.amount = Number(cashtokensUtxos.utxos[0].value) / 1e8 // convert to BCH
+        if (recipient.tokenAmount) {
+          recipient.amount = Number(cashtokensUtxos.utxos[0].value) / 1e8 // convert to BCH
+        }
       })
 
       combinedUtxos = cashtokensUtxos.utxos;
