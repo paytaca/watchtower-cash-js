@@ -128,7 +128,6 @@ const privateKeyToCashaddress = (privateKey: Uint8Array, isChipnet: boolean): st
 export default class BCH {
   isChipnet: boolean;
   _api: AxiosInstance;
-  dustLimit: number;
 
   constructor(apiBaseUrl, isChipnet) {
     this.isChipnet = isChipnet
@@ -136,7 +135,14 @@ export default class BCH {
       baseURL: apiBaseUrl,
       timeout: 60 * 1000  // 1 minute
     })
-    this.dustLimit = 546
+  }
+
+  getDustLimit (tokenOutput = false) {
+    if (tokenOutput) {
+      return 1000;
+    } else {
+      return 546;
+    }
   }
 
   async getBchUtxos(handle: string, value: number, opts?: GetBchUtxosOptions): Promise<GetBchUtxosResponse> {
@@ -378,7 +384,8 @@ export default class BCH {
           error: 'recipient should have a valid BCH address'
         }
       }
-      totalSendAmount += BigInt(Math.round(recipient.amount * 1e8))
+      const _amount = recipient.amount || (this.getDustLimit(recipient.tokenAmount !== undefined) / 1e8);
+      totalSendAmount += BigInt(Math.round(_amount * 1e8))
     }
     const totalSendAmountSats = totalSendAmount
 
@@ -461,7 +468,8 @@ export default class BCH {
 
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      const sendAmount = BigInt(Math.round(recipient.amount * 1e8))
+      const _amount = recipient.amount || (this.getDustLimit(recipient.tokenAmount !== undefined) / 1e8);
+      const sendAmount = BigInt(Math.round(_amount * 1e8))
 
       const libauthToken = recipients[i].tokenAmount !== undefined ? {
         amount: recipients[i].tokenAmount,
@@ -533,7 +541,7 @@ export default class BCH {
 
       // Send BCH change back to sender address, if any
       senderRemainder = totalInput - totalOutput
-      if (senderRemainder >= this.dustLimit) {
+      if (senderRemainder >= this.getDustLimit()) {
         transaction.outputs.push({
           lockingBytecode: cashAddressToLockingBytecode(changeAddress).bytecode,
           valueSatoshis: senderRemainder
@@ -564,7 +572,7 @@ export default class BCH {
       }
 
       const feeFunderRemainder = feeInputContrib - txFee
-      if (feeFunderRemainder > this.dustLimit) {
+      if (feeFunderRemainder > this.getDustLimit()) {
         transaction.outputs.push({
           lockingBytecode: cashAddressToLockingBytecode(feeFunder.address).bytecode,
           valueSatoshis: feeFunderRemainder,
@@ -576,7 +584,7 @@ export default class BCH {
     } else {
       // Send the BCH change back to the wallet, if any
       senderRemainder = totalInput - (totalOutput + txFee)
-      if (senderRemainder >= this.dustLimit) {
+      if (senderRemainder >= this.getDustLimit()) {
         transaction.outputs.push({
           lockingBytecode: cashAddressToLockingBytecode(changeAddress).bytecode,
           valueSatoshis: senderRemainder,
