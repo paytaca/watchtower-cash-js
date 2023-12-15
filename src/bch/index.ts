@@ -12,6 +12,8 @@ export interface BchUtxo {
   value: bigint;
   wallet_index: string | null;
   address_path: string;
+  txid?: string;
+  vout?: number;
 }
 
 export interface CashtokenUtxo extends BchUtxo {
@@ -74,6 +76,8 @@ export interface Token {
   commitment?: string;
   capability?: string;
   amount?: bigint;
+  txid?: string;
+  vout?: number;
 }
 
 export interface Sender {
@@ -238,6 +242,8 @@ export default class BCH {
         address_path: item.address_path,
         capability: item.capability || undefined,
         commitment: item.commitment !== null ? item.commitment : undefined,
+        txid: item.txid,
+        vout: item.vout
       } as any
 
       return finalizedUtxoFormat
@@ -338,6 +344,13 @@ export default class BCH {
         handle,
         { ...token, amount: totalTokenSendAmount },
       )
+
+      // If NFT be more specific. Make sure to spend specific utxo.
+      if (token.capability) {
+        cashtokensUtxos.utxos = cashtokensUtxos.utxos.filter((val) => {
+          return val.txid == token.txid && val.vout == token.vout
+        }) 
+      }
 
       if (!cashtokensUtxos.utxos.length) {
         return {
