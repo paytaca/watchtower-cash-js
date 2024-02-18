@@ -158,6 +158,7 @@ export default class BCH {
     if (handle.indexOf('wallet:') > -1) {
       resp = await this._api.get(`utxo/wallet/${handle.split('wallet:')[1]}/`, { params })
     } else {
+      handle = new Address(handle).toCashAddress()
       resp = await this._api.get(`utxo/bch/${handle}/`, { params })
     }
     let cumulativeValue = 0n

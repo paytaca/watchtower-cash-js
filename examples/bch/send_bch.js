@@ -1,16 +1,16 @@
-const Watchtower = require('../../src')
+import Watchtower from '../../dist/index.js'
 
 const watchtower = new Watchtower()
 
 const data = {
   sender: {
-    address: 'bitcoincash:qp6ls99pxdfsvue4jqhla0esjjm7h685xu5q03v058',
-    wif: 'XXX'  // <-- private key of the sender address
+    address: 'bitcoincash:qrwvvjuer2zartus2x4rqtujh6ydh0v75cue6kflwy',
+    wif: ''  // <-- private key of the sender address
   },
   recipients: [
     {
-      address: 'bitcoincash:qr2evcvc92y8pqu4n85zu24qanlh9lxsdsm7zff6ka',
-      amount: 1
+      address: 'bitcoincash:qqm0mff5klkt697tzuqt73dywl742tv7hqhxkckazg',
+      amount: 0.001
     }
   ],
   broadcast: true
