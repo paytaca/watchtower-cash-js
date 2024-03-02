@@ -343,7 +343,7 @@ export default class BCH {
 
       const cashtokensUtxos = await this.getCashtokensUtxos(
         handle,
-        { ...token, amount: totalTokenSendAmount },
+        { ...token, amount: BigInt(totalTokenSendAmount) },
       )
 
       // If NFT be more specific. Make sure to spend specific utxo.
@@ -373,7 +373,7 @@ export default class BCH {
         recipients.push({
           address: changeAddress,
           amount: 0, // will be set on the next step,
-          tokenAmount: diff
+          tokenAmount: BigInt(diff)
         });
       }
 
@@ -442,7 +442,7 @@ export default class BCH {
       }
 
       const libauthToken = combinedUtxos[i].tokenId ? {
-        amount: combinedUtxos[i].amount,
+        amount: BigInt(combinedUtxos[i].amount),
         category: hexToBin(combinedUtxos[i].tokenId),
         nft: combinedUtxos[i].commitment !== undefined ? {
           capability: combinedUtxos[i].capability,
@@ -486,7 +486,7 @@ export default class BCH {
       const sendAmount = BigInt(Math.round(_amount * 1e8))
 
       const libauthToken = recipients[i].tokenAmount !== undefined ? {
-        amount: recipients[i].tokenAmount,
+        amount: BigInt(recipients[i].tokenAmount),
         category: hexToBin(token.tokenId),
         nft: token.commitment !== undefined ? {
           capability: token.capability,
