@@ -141,7 +141,7 @@ export default class BCH {
     })
   }
 
-  getDustLimit (tokenOutput = false) {
+  getDustLimit(tokenOutput = false) {
     if (tokenOutput) {
       return 1000;
     } else {
@@ -350,7 +350,7 @@ export default class BCH {
       if (token.capability) {
         cashtokensUtxos.utxos = cashtokensUtxos.utxos.filter((val) => {
           return val.txid == token.txid && val.vout == token.vout
-        }) 
+        })
       }
 
       if (!cashtokensUtxos.utxos.length) {
@@ -392,7 +392,13 @@ export default class BCH {
     let totalSendAmount = 0n
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
-      if (!new Address(recipient.address).isValidBCHAddress(this.isChipnet)) {
+      const addressValidator = new Address(recipient.address)
+
+      if (
+        !addressValidator.isValidBCHAddress(this.isChipnet) &&
+        !addressValidator.isP2SH() &&
+        !addressValidator.isTokenAddress()
+      ) {
         return {
           success: false,
           error: 'recipient should have a valid BCH address'
