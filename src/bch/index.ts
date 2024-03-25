@@ -108,6 +108,7 @@ export interface SendResponse {
   success: boolean;
   transaction?: string;
   fee?: bigint;
+  lackingSats?: bigint;
   error?: string;
 }
 
@@ -411,7 +412,15 @@ export default class BCH {
 
     const bchUtxos = await this.getBchUtxos(handle, Number(totalSendAmountSats))
     if (bchUtxos.cumulativeValue < totalSendAmountSats) {
+      let lackingSats = totalSendAmountSats - bchUtxos.cumulativeValue
+      const dust = BigInt(this.getDustLimit(true))
+
+      if (lackingSats < dust) {
+        lackingSats = dust
+      }
+
       return {
+        lackingSats,
         success: false,
         error: `not enough balance in sender (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
       }
