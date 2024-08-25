@@ -411,18 +411,21 @@ export default class BCH {
     const totalSendAmountSats = totalSendAmount
 
     const bchUtxos = await this.getBchUtxos(handle, Number(totalSendAmountSats))
-    if (bchUtxos.cumulativeValue < totalSendAmountSats) {
-      let lackingSats = totalSendAmountSats - bchUtxos.cumulativeValue
-      const dust = BigInt(this.getDustLimit(true))
+    
+    if (feeFunder === undefined) {
+      if (bchUtxos.cumulativeValue < totalSendAmountSats) {
+        let lackingSats = totalSendAmountSats - bchUtxos.cumulativeValue
+        const dust = BigInt(this.getDustLimit(true))
 
-      if (lackingSats < dust) {
-        lackingSats = dust
-      }
+        if (lackingSats < dust) {
+          lackingSats = dust
+        }
 
-      return {
-        lackingSats,
-        success: false,
-        error: `not enough balance in sender (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
+        return {
+          lackingSats,
+          success: false,
+          error: `not enough balance in sender (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
+        }
       }
     }
 
@@ -539,8 +542,6 @@ export default class BCH {
 
       let feeFunderPrivKey: Uint8Array;
       if (feeFunder.derivationPath) {
-        feeFunderPrivKey = this.retrievePrivateKey(feeFunder.mnemonic, feeFunder.derivationPath, '0/0');
-        feeFunder.address = privateKeyToCashaddress(feeFunderPrivKey, this.isChipnet);
         feeFunderUtxos = await this.getBchUtxos(`wallet:${feeFunder.walletHash}`, Number(txFee))
       } else {
         const decodeResult = decodePrivateKeyWif(feeFunder.wif);
@@ -583,7 +584,18 @@ export default class BCH {
       for (let i = 0; i < feeFunderUtxos.utxos.length; i++) {
         totalInput = totalInput + feeFunderUtxos.utxos[i].value
         feeInputContrib = feeInputContrib + feeFunderUtxos.utxos[i].value
-
+        txFee += BigInt(148); // This is the size of a typical BCH P2PKH input
+        if (feeFunder.derivationPath) {
+          let addressPath: string;
+          if (feeFunderUtxos.utxos[i].address_path) {
+              addressPath = feeFunderUtxos.utxos[i].address_path;
+          }
+          else {
+              addressPath = feeFunderUtxos.utxos[i].wallet_index;
+          }
+          feeFunderPrivKey = this.retrievePrivateKey(feeFunder.mnemonic, feeFunder.derivationPath, addressPath)
+          feeFunder.address = privateKeyToCashaddress(feeFunderPrivKey, this.isChipnet);
+        }
         transaction.inputs.push({
           outpointIndex: feeFunderUtxos.utxos[i].tx_pos,
           outpointTransactionHash: hexToBin(feeFunderUtxos.utxos[i].tx_hash),
@@ -593,7 +605,7 @@ export default class BCH {
             data: {
               keys: { privateKeys: { key: feeFunderPrivKey } },
             },
-            valueSatoshis: combinedUtxos[i].value,
+            valueSatoshis: feeFunderUtxos.utxos[i].value,
             script: "unlock",
             token: undefined,
           },
