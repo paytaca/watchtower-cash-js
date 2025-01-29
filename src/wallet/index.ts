@@ -38,7 +38,7 @@ export default class Wallet {
     return balance.data
   }
 
-  async getHistory ({ walletHash, tokenId, page, recordType }: { walletHash: string, tokenId: string, page: number, recordType: string }): Promise<    {
+  async getHistory ({ walletHash, tokenId, page, recordType, txSearchReference }: { walletHash: string, tokenId: string, page: number, recordType: string, txSearchReference: string }): Promise<    {
     history:
       {
         record_type: 'outgoing' | 'incoming',
@@ -63,12 +63,17 @@ export default class Wallet {
     if (!recordType) {
       recordType = 'all'
     }
-    let history
+
+    let url
     if (tokenId) {
-      history = await this._api.get(`history/wallet/${walletHash}/${tokenId}/?page=${page}&type=${recordType}`)
+      url = `history/wallet/${walletHash}/${tokenId}/?page=${page}&type=${recordType}`
     } else {
-      history = await this._api.get(`history/wallet/${walletHash}/?page=${page}&type=${recordType}`)
+      url = `history/wallet/${walletHash}/?page=${page}&type=${recordType}`
     }
+    if (txSearchReference) {
+        url += `&reference=${txSearchReference}`;
+    }
+    const history = await this._api.get(url)
     return history.data
   }
 }
