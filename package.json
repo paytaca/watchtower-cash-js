@@ -31,7 +31,7 @@
   },
   "homepage": "https://github.com/paytaca/watchtower-cash-js#readme",
   "dependencies": {
-    "@bitauth/libauth": "^2.0.0-alpha.8",
+    "@bitauth/libauth": "v2.0.0-alpha.8",
     "@psf/bch-js": "^6.3.4",
     "axios": "^0.21.1",
     "bip39": "^3.1.0",

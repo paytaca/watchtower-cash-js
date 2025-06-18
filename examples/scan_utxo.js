@@ -1,4 +1,4 @@
-const Watchtower = require('../src')
+import Watchtower from '../dist/index.js'
 
 const watchtower = new Watchtower()
 

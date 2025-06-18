@@ -2,22 +2,24 @@ import Watchtower from '../../dist/index.js'
 
 const watchtower = new Watchtower()
 
+const wif = "" // <-- private key of the sender address
+
 const data = {
   sender: {
-    address: 'bitcoincash:zrwvvjuer2zartus2x4rqtujh6ydh0v75cmnfg8e3h',
-    wif: ''  // <-- private key of the sender address
+    address: "bitcoincash:zrgzfwc8lx2p8pw7hhghxhshenxa49u0vsfaxlv92w",
+    wif: wif
   },
   token: {
-    tokenId: 'de980d12e49999f1dbc8d61a8f119328f7be9fb1c308eafe979bf10abb17200d',
+    tokenId: "8473d94f604de351cdee3030f6c354d36b257861ad8e95bbc0a06fbab2a2f9cf",
   },
   recipients: [
     {
-      address: 'bitcoincash:zqm0mff5klkt697tzuqt73dywl742tv7hqsv9xcmam',
-      tokenAmount: 5
+      address: "bitcoincash:qq0060pts4sa3txcvnqjnws9cs4hq9w8egzf8xdw2z",
+      tokenAmount: 3
     }
   ],
-  changeAddress: 'bitcoincash:zqm0mff5klkt697tzuqt73dywl742tv7hqsv9xcmam',
-  broadcast: false
+  changeAddress: "bitcoincash:zrgzfwc8lx2p8pw7hhghxhshenxa49u0vsfaxlv92w",
+  broadcast: true
 }
 
 watchtower.BCH.send(data).then(function (result) {
