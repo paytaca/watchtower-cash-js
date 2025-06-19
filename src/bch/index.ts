@@ -2,7 +2,27 @@ import axios, { AxiosInstance, AxiosResponse } from "axios"
 import Address from "../address/index.js"
 import OpReturnGenerator from "./op_returns.js"
 
-import { TransactionTemplateFixed, authenticationTemplateP2pkhNonHd, authenticationTemplateToCompilerBCH, binToHex, cashAddressToLockingBytecode as _cashAddressToLockingBytecode, deriveHdPath, deriveHdPrivateNodeFromSeed, encodeTransaction, generateTransaction, hexToBin, importAuthenticationTemplate, decodePrivateKeyWif, secp256k1, hash160, encodeCashAddress, CashAddressType, CashAddressNetworkPrefix, TransactionGenerationError, readCompactSize, Output, encodePrivateKeyWif } from "@bitauth/libauth";
+import { 
+  TransactionTemplateFixed, 
+  authenticationTemplateP2pkhNonHd, 
+  authenticationTemplateToCompilerBCH, 
+  binToHex, 
+  cashAddressToLockingBytecode as _cashAddressToLockingBytecode, 
+  deriveHdPath, 
+  deriveHdPrivateNodeFromSeed, 
+  encodeTransaction, 
+  generateTransaction, 
+  hexToBin, 
+  importAuthenticationTemplate, 
+  decodePrivateKeyWif, 
+  secp256k1, 
+  hash160, 
+  encodeCashAddress, 
+  CashAddressType, 
+  CashAddressNetworkPrefix, 
+  TransactionGenerationError, 
+  Output
+} from "@bitauth/libauth";
 import { mnemonicToSeedSync } from "bip39";
 
 export interface BchUtxo {
@@ -32,6 +52,7 @@ export interface GetBchUtxosResponse {
 
 export interface GetBchUtxosOptions {
   confirmed?: boolean,
+  filterByMinValue?: boolean, // if true, filter out UTXOs that are below the given value
 }
 
 export interface GetCashtokensUtxosResponse {
@@ -41,9 +62,7 @@ export interface GetCashtokensUtxosResponse {
   utxos: CashtokenUtxo[]
 }
 
-export interface GetCashtokensUtxosOptions extends GetBchUtxosOptions {
-}
-
+export interface GetCashtokensUtxosOptions extends GetBchUtxosOptions {}
 
 // some fields are optional, we can reflect that later
 export interface WatchTowerUtxoResponse {
@@ -99,9 +118,11 @@ export interface SendRequest {
   recipients: Array<Recipient>;
   feeFunder?: Sender;
   changeAddress?: string;
+  utxos?: BchUtxo[] | CashtokenUtxo[];
   broadcast?: boolean;
   data?: string;
-  token?: Token
+  token?: Token;
+  minimizeInputs?: boolean; // default: true
 }
 
 export interface SendResponse {
@@ -166,13 +187,27 @@ export default class BCH {
     let inputBytes = 0
     let filteredUtxos = []
     const utxos = resp.data.utxos
+
     for (let i = 0; i < utxos.length; i++) {
+      if (opts?.filterByMinValue) {
+        if (utxos[i].value < this.getDustLimit()) {
+          continue; // skip UTXOs below the dust limit
+        }
+
+        if (value > 0 && utxos[i].value < value) {
+          continue; // skip UTXOs that are below the required value
+        }
+      }
+
       cumulativeValue = cumulativeValue + BigInt(utxos[i].value)
       filteredUtxos.push(utxos[i])
-      inputBytes += 180  // average byte size of a single input
-      const valuePlusFee = value + inputBytes
-      if (cumulativeValue >= valuePlusFee) {
-        break
+
+      if (!opts?.filterByMinValue && value > 0) {
+        inputBytes += 180  // average byte size of a single input
+        const valuePlusFee = value + inputBytes
+        if (cumulativeValue >= valuePlusFee) {
+          break
+        }
       }
     }
     return {
@@ -223,10 +258,18 @@ export default class BCH {
     }
 
     for (let i = 0; i < utxos.length; i++) {
+      if (opts?.filterByMinValue) {
+        if (requiredFtAmount > 0 && utxos[i].amount < requiredFtAmount) {
+          continue; // skip UTXOs that are below the required value
+        }
+      }
+
       filteredUtxos.push(utxos[i])
       cumulativeTokenAmount = cumulativeTokenAmount + BigInt(utxos[i].amount)
-      if (cumulativeTokenAmount > requiredFtAmount) {
-        break
+      if (!opts?.filterByMinValue && requiredFtAmount > 0n) {
+        if (cumulativeTokenAmount > requiredFtAmount) {
+          break
+        }
       }
     }
 
@@ -281,7 +324,93 @@ export default class BCH {
     return child.privateKey;
   }
 
-  async send({ sender, recipients, feeFunder, changeAddress, broadcast, data, token }: SendRequest): Promise<SendResponse> {
+  sanitizeUtxos({ utxos, value = 0n, isCashtoken, minimizeInputs = true, token }: { utxos: any[]; value?: bigint; minimizeInputs?: boolean; isCashtoken: boolean; token?: any }): GetBchUtxosResponse | GetCashtokensUtxosResponse {
+
+    let cumulativeValue = 0n
+    let cumulativeTokenAmount = 0n
+    let tokenDecimals = 0
+    let filteredUtxos: any[] = []
+
+    if (isCashtoken) {
+      // const token = token || {};
+      utxos = utxos.filter(val => 
+        (val.commitment ?? null) === (token?.commitment ?? null) && 
+        (val.capability ?? null) === (token?.capability ?? null) && 
+        val.tokenId === token?.tokenId);
+
+      const requiredFtAmount = token?.amount || 0n;
+
+      if (utxos.length > 0) {
+        tokenDecimals = utxos[0].decimals
+      } else {
+        return {
+          cumulativeValue: 0n,
+          cumulativeTokenAmount: 0n,
+          tokenDecimals,
+          utxos: []
+        }
+      }
+
+      for (let i = 0; i < utxos.length; i++) {
+        filteredUtxos.push(utxos[i])
+        cumulativeTokenAmount = cumulativeTokenAmount + BigInt(utxos[i].amount)
+        if (minimizeInputs && requiredFtAmount > 0n &&
+            cumulativeTokenAmount > requiredFtAmount) {
+          break
+        }
+      }
+    } else {
+      let inputBytes = 0n
+      for (let i = 0; i < utxos.length; i++) {
+        cumulativeValue = cumulativeValue + BigInt(utxos[i].value)
+        filteredUtxos.push(utxos[i])
+
+        if (minimizeInputs && value > 0n) {
+          inputBytes += 180n;  // average byte size of a single input
+          const valuePlusFee = value + inputBytes;
+          if (cumulativeValue >= valuePlusFee) {
+            break
+          }
+        }
+      }
+    }
+
+    const finalUtxos = filteredUtxos.map(function (item : any) {
+      cumulativeValue = cumulativeValue + BigInt(item.value)
+      let finalizedUtxoFormat = {
+        tx_hash: item.tx_hash,
+        tx_pos: item.tx_pos,
+        block: item.block,
+        value: BigInt(item.value),
+        wallet_index: item.wallet_index,
+        address_path: item.address_path
+      } as any
+
+      if (isCashtoken) {
+        finalizedUtxoFormat = {
+          ...finalizedUtxoFormat,
+          amount: BigInt(item.amount || 0),
+          decimals: item.decimals,
+          tokenId: item.tokenId,
+          capability: item.capability || undefined,
+          commitment: item.commitment !== null ? item.commitment : undefined,
+          txid: item.txid,
+          vout: item.vout
+        }
+      }
+      
+      return finalizedUtxoFormat
+    })
+
+    return {
+      cumulativeValue: cumulativeValue,
+      cumulativeTokenAmount: cumulativeTokenAmount,
+      tokenDecimals: tokenDecimals,
+      utxos: finalUtxos
+    }
+  }
+
+  async send({ sender, recipients, feeFunder, changeAddress, utxos, broadcast, data, token, minimizeInputs = true }: SendRequest): Promise<SendResponse> {
     if (feeFunder && ((feeFunder.wif && feeFunder.wif === sender.wif) || (feeFunder.mnemonic && feeFunder.mnemonic === sender.mnemonic))) {
       return {
         success: false,
@@ -342,10 +471,24 @@ export default class BCH {
         }
       }
 
-      const cashtokensUtxos = await this.getCashtokensUtxos(
-        handle,
-        { ...token, amount: BigInt(totalTokenSendAmount) },
-      )
+      let cashtokensUtxos: GetCashtokensUtxosResponse | undefined;
+      if (utxos && utxos.length > 0) {
+        const sanitizedCashtokensUtxos = this.sanitizeUtxos({
+          utxos,
+          value: 0n,
+          isCashtoken: true,
+          minimizeInputs: minimizeInputs,
+          token: { ...token, amount: BigInt(totalTokenSendAmount) }
+        });
+        cashtokensUtxos = sanitizedCashtokensUtxos as GetCashtokensUtxosResponse | undefined;
+      }
+      
+      if (!cashtokensUtxos) {
+        cashtokensUtxos = await this.getCashtokensUtxos(
+          handle,
+          { ...token, amount: BigInt(totalTokenSendAmount) },
+        )
+      }
 
       // If NFT be more specific. Make sure to spend specific utxo.
       if (token.capability) {
@@ -354,7 +497,7 @@ export default class BCH {
         })
       }
 
-      if (!cashtokensUtxos.utxos.length) {
+      if (!cashtokensUtxos.utxos?.length) {
         return {
           success: false,
           error: 'no suitable utxos were found to spend token'
@@ -391,6 +534,7 @@ export default class BCH {
     let totalOutput = 0n
 
     let totalSendAmount = 0n
+
     for (let i = 0; i < recipients.length; i++) {
       const recipient = recipients[i]
       const addressValidator = new Address(recipient.address)
@@ -408,10 +552,24 @@ export default class BCH {
       const _amount = recipient.amount || (this.getDustLimit(recipient.tokenAmount !== undefined) / 1e8);
       totalSendAmount += BigInt(Math.round(_amount * 1e8))
     }
+
     const totalSendAmountSats = totalSendAmount
 
-    const bchUtxos = await this.getBchUtxos(handle, Number(totalSendAmountSats))
+    let bchUtxos: GetBchUtxosResponse | undefined;
+    if (!token?.tokenId && utxos && utxos?.length > 0) {
+      const sanitizedBchUtxos = this.sanitizeUtxos({ 
+        utxos, 
+        isCashtoken: false, 
+        minimizeInputs: true, 
+        value: totalSendAmountSats 
+      });
+      bchUtxos = sanitizedBchUtxos as GetBchUtxosResponse | undefined;
+    }
     
+    if (!bchUtxos) {
+      bchUtxos = await this.getBchUtxos(handle, Number(totalSendAmountSats))
+    }
+
     if (feeFunder === undefined) {
       if (bchUtxos.cumulativeValue < totalSendAmountSats) {
         let lackingSats = totalSendAmountSats - bchUtxos.cumulativeValue

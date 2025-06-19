@@ -4,15 +4,18 @@ const watchtower = new Watchtower()
 
 const data = {
   sender: {
-    address: 'bitcoincash:qrwvvjuer2zartus2x4rqtujh6ydh0v75cue6kflwy',
-    wif: ''  // <-- private key of the sender address
+    wif: '', // <-- private key of the sender address
+    address: 'bitcoincash:qrgzfwc8lx2p8pw7hhghxhshenxa49u0vswh4pzr4a'
   },
   recipients: [
     {
-      address: 'bitcoincash:qqm0mff5klkt697tzuqt73dywl742tv7hqhxkckazg',
-      amount: 0.001
+      address: "bitcoincash:qq0060pts4sa3txcvnqjnws9cs4hq9w8egzf8xdw2z",
+      amount: 0.00001,
+      tokenAmount: undefined
     }
   ],
+  changeAddress: 'bitcoincash:qrgzfwc8lx2p8pw7hhghxhshenxa49u0vswh4pzr4a',
+  token: null,
   broadcast: true
 }
 
