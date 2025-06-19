@@ -52,6 +52,7 @@ export interface GetBchUtxosResponse {
 
 export interface GetBchUtxosOptions {
   confirmed?: boolean,
+  filterByMinValue?: boolean, // if true, filter out UTXOs that are below the given value
 }
 
 export interface GetCashtokensUtxosResponse {
@@ -61,8 +62,7 @@ export interface GetCashtokensUtxosResponse {
   utxos: CashtokenUtxo[]
 }
 
-export interface GetCashtokensUtxosOptions extends GetBchUtxosOptions {
-}
+export interface GetCashtokensUtxosOptions extends GetBchUtxosOptions {}
 
 // some fields are optional, we can reflect that later
 export interface WatchTowerUtxoResponse {
@@ -189,10 +189,20 @@ export default class BCH {
     const utxos = resp.data.utxos
 
     for (let i = 0; i < utxos.length; i++) {
+      if (opts?.filterByMinValue) {
+        if (utxos[i].value < this.getDustLimit()) {
+          continue; // skip UTXOs below the dust limit
+        }
+
+        if (value > 0 && utxos[i].value < value) {
+          continue; // skip UTXOs that are below the required value
+        }
+      }
+
       cumulativeValue = cumulativeValue + BigInt(utxos[i].value)
       filteredUtxos.push(utxos[i])
 
-      if (value > 0) {
+      if (!opts?.filterByMinValue && value > 0) {
         inputBytes += 180  // average byte size of a single input
         const valuePlusFee = value + inputBytes
         if (cumulativeValue >= valuePlusFee) {
@@ -248,10 +258,18 @@ export default class BCH {
     }
 
     for (let i = 0; i < utxos.length; i++) {
+      if (opts?.filterByMinValue) {
+        if (requiredFtAmount > 0 && utxos[i].amount < requiredFtAmount) {
+          continue; // skip UTXOs that are below the required value
+        }
+      }
+
       filteredUtxos.push(utxos[i])
       cumulativeTokenAmount = cumulativeTokenAmount + BigInt(utxos[i].amount)
-      if (requiredFtAmount > 0n && cumulativeTokenAmount > requiredFtAmount) {
-        break
+      if (!opts?.filterByMinValue && requiredFtAmount > 0n) {
+        if (cumulativeTokenAmount > requiredFtAmount) {
+          break
+        }
       }
     }
 
