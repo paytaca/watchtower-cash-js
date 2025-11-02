@@ -144,8 +144,12 @@ export default class SlpNft1Parent {
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async broadcastTransaction (txHex) {
-    const resp = await this._api.post('broadcast/', { transaction: txHex })
+  async broadcastTransaction (txHex, priceId) {
+    const payload = { transaction: txHex }
+    if (priceId !== undefined && priceId !== null) {
+      payload.price_id = priceId
+    }
+    const resp = await this._api.post('broadcast/', payload)
     return resp
   }
 
@@ -155,7 +159,8 @@ export default class SlpNft1Parent {
     groupTokenId,
     recipient,
     changeAddress,
-    broadcast
+    broadcast,
+    priceId = null
   }) {
     const isChildNft = false
     return await this.createChildNftOrMintingBatonUtxo({
@@ -165,7 +170,8 @@ export default class SlpNft1Parent {
       recipient,
       changeAddress,
       broadcast,
-      isChildNft
+      isChildNft,
+      priceId
     })
   }
 
@@ -178,7 +184,8 @@ export default class SlpNft1Parent {
     broadcast,
     label,
     ticker,
-    docUrl = ''
+    docUrl = '',
+    priceId = null
   }) {
     return await this.createChildNftOrMintingBatonUtxo({
       sender,
@@ -189,7 +196,8 @@ export default class SlpNft1Parent {
       broadcast,
       label,
       ticker,
-      docUrl
+      docUrl,
+      priceId
     })
   }
 
@@ -214,7 +222,8 @@ export default class SlpNft1Parent {
     label,
     ticker,
     docUrl,
-    isChildNft = true
+    isChildNft = true,
+    priceId = null
   }) {
     let walletHash
     if (sender.walletHash !== undefined) {
@@ -413,7 +422,7 @@ export default class SlpNft1Parent {
 
     if (broadcast) {
       try {
-        const response = await this.broadcastTransaction(hex)
+        const response = await this.broadcastTransaction(hex, priceId)
         return response.data
       } catch (error) {
         return error.response.data
@@ -438,7 +447,8 @@ export default class SlpNft1Parent {
     ticker,
     initialQty,
     docUrl = '',
-    fixedSupply = false
+    fixedSupply = false,
+    priceId = null
   }) {
     const slpType1 = new SlpType1(this.baseUrl)
     return await slpType1.create({
@@ -453,7 +463,8 @@ export default class SlpNft1Parent {
       initialQty,
       docUrl,
       fixedSupply,
-      isNftParent: true
+      isNftParent: true,
+      priceId
     })
   }
 
@@ -466,7 +477,8 @@ export default class SlpNft1Parent {
     mintBatonRecipient,
     changeAddress,
     broadcast,
-    passMintingBaton = true
+    passMintingBaton = true,
+    priceId = null
   }) {
     if (quantity < 1) {
       return {
@@ -672,7 +684,7 @@ export default class SlpNft1Parent {
 
     if (broadcast) {
       try {
-        const response = await this.broadcastTransaction(hex)
+        const response = await this.broadcastTransaction(hex, priceId)
         return response.data
       } catch (error) {
         return error.response.data
@@ -692,7 +704,8 @@ export default class SlpNft1Parent {
     tokenId,
     recipients,
     changeAddresses,
-    broadcast
+    broadcast,
+    priceId = null
   }) {
     let walletHash
     if (sender.walletHash !== undefined) {
@@ -915,7 +928,7 @@ export default class SlpNft1Parent {
 
     if (broadcast) {
       try {
-        const response = await this.broadcastTransaction(hex)
+        const response = await this.broadcastTransaction(hex, priceId)
         return response.data
       } catch (error) {
         return error.response.data

@@ -114,8 +114,12 @@ export default class SlpNft1Child {
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async broadcastTransaction (txHex) {
-    const resp = await this._api.post('broadcast/', { transaction: txHex })
+  async broadcastTransaction (txHex, priceId) {
+    const payload = { transaction: txHex }
+    if (priceId !== undefined && priceId !== null) {
+      payload.price_id = priceId
+    }
+    const resp = await this._api.post('broadcast/', payload)
     return resp
   }
 
@@ -125,7 +129,8 @@ export default class SlpNft1Child {
     childTokenId,
     recipient,
     changeAddress,
-    broadcast
+    broadcast,
+    priceId = null
   }) {
     let walletHash
     if (sender.walletHash !== undefined) {
@@ -315,7 +320,7 @@ export default class SlpNft1Child {
 
     if (broadcast) {
       try {
-        const response = await this.broadcastTransaction(hex)
+        const response = await this.broadcastTransaction(hex, priceId)
         return response.data
       } catch (error) {
         return error.response.data

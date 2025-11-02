@@ -123,6 +123,7 @@ export interface SendRequest {
   data?: string;
   token?: Token;
   minimizeInputs?: boolean; // default: true
+  priceId?: number;
 }
 
 export interface SendResponse {
@@ -302,13 +303,17 @@ export default class BCH {
     }
   }
 
-  async broadcastTransaction(txHex: string): Promise<{
+  async broadcastTransaction(txHex: string, priceId?: number | null): Promise<{
     txid: string
     success: boolean
   } | {
     error: string
   }> {
-    const resp = await this._api.post('broadcast/', { transaction: txHex })
+    const payload: { transaction: string; price_id?: number } = { transaction: txHex }
+    if (priceId !== undefined && priceId !== null) {
+      payload.price_id = priceId
+    }
+    const resp = await this._api.post('broadcast/', payload)
     return resp as any
   }
 
@@ -410,7 +415,7 @@ export default class BCH {
     }
   }
 
-  async send({ sender, recipients, feeFunder, changeAddress, utxos, broadcast, data, token, minimizeInputs = true }: SendRequest): Promise<SendResponse> {
+  async send({ sender, recipients, feeFunder, changeAddress, utxos, broadcast, data, token, minimizeInputs = true, priceId = null }: SendRequest): Promise<SendResponse> {
     if (feeFunder && ((feeFunder.wif && feeFunder.wif === sender.wif) || (feeFunder.mnemonic && feeFunder.mnemonic === sender.mnemonic))) {
       return {
         success: false,
@@ -815,7 +820,7 @@ export default class BCH {
 
     if (broadcast) {
       try {
-        const response = await this.broadcastTransaction(hex)
+        const response = await this.broadcastTransaction(hex, priceId)
         return (response as any).data
       } catch (error) {
         return error.response.data

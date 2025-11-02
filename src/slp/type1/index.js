@@ -125,8 +125,12 @@ export default class SlpType1 {
     return bchjs.HDNode.toWIF(childNode)
   }
 
-  async broadcastTransaction (txHex) {
-    const resp = await this._api.post('broadcast/', { transaction: txHex })
+  async broadcastTransaction (txHex, priceId) {
+    const payload = { transaction: txHex }
+    if (priceId !== undefined && priceId !== null) {
+      payload.price_id = priceId
+    }
+    const resp = await this._api.post('broadcast/', payload)
     return resp
   }
 
@@ -137,7 +141,8 @@ export default class SlpType1 {
     recipients,
     changeAddresses,
     broadcast,
-    burn = false
+    burn = false,
+    priceId = null
   }) {
     let walletHash
     if (sender.walletHash !== undefined) {
@@ -381,7 +386,7 @@ export default class SlpType1 {
 
     if (broadcast) {
       try {
-        const response = await this.broadcastTransaction(hex)
+        const response = await this.broadcastTransaction(hex, priceId)
         return response.data
       } catch (error) {
         return error.response.data
@@ -409,7 +414,8 @@ export default class SlpType1 {
     docUrl = '',
     docHash = '',
     fixedSupply = false,
-    isNftParent = false
+    isNftParent = false,
+    priceId = null
   }) {    
     if (fixedSupply) {
       if (initialQty < 1) {
@@ -651,7 +657,7 @@ export default class SlpType1 {
 
     if (broadcast) {
       try {
-        const response = await this.broadcastTransaction(hex)
+        const response = await this.broadcastTransaction(hex, priceId)
         return response.data
       } catch (error) {
         return error.response.data
@@ -674,7 +680,8 @@ export default class SlpType1 {
     mintBatonRecipient,
     changeAddress,
     broadcast,
-    passMintingBaton = true
+    passMintingBaton = true,
+    priceId = null
   }) {
     if (quantity < 1) {
       return {
@@ -879,7 +886,7 @@ export default class SlpType1 {
 
     if (broadcast) {
       try {
-        const response = await this.broadcastTransaction(hex)
+        const response = await this.broadcastTransaction(hex, priceId)
         return response.data
       } catch (error) {
         return error.response.data
