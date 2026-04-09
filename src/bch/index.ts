@@ -344,7 +344,7 @@ export default class BCH {
       utxos = utxos.filter(val => 
         (val.commitment ?? null) === (token?.commitment ?? null) && 
         (val.capability ?? null) === (token?.capability ?? null) && 
-        val.tokenId === token?.tokenId);
+        val.tokenid === token?.tokenId);
 
       const requiredFtAmount = token?.amount || 0n;
 
@@ -499,7 +499,7 @@ export default class BCH {
       }
 
       // If NFT be more specific. Make sure to spend specific utxo.
-      if (token.capability) {
+      if (token.capability && token.txid !== undefined && token.vout !== undefined) {
         cashtokensUtxos.utxos = cashtokensUtxos.utxos.filter((val) => {
           return val.txid == token.txid && val.vout == token.vout
         })
