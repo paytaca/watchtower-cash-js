@@ -1,7 +1,6 @@
 import { decodeTransaction as _decodeTransaction, binToHex, hexToBin, lockingBytecodeToCashAddress } from "@bitauth/libauth";
 import BCH, { SendRequest } from "../bch";
 import { setupAxiosMock } from "../test/axios";
-import { OpReturnData } from "mainnet-js"
 import Wallet from "../wallet";
 
 const decodeTransaction = (txHex: string) => {
@@ -9,6 +8,40 @@ const decodeTransaction = (txHex: string) => {
   if (typeof transaction === "string") {
     throw transaction;
   }
+
+  // Helper to parse OP_RETURN data pushes from locking bytecode
+  const parseOpReturnData = (bytecode: Uint8Array): string[] | undefined => {
+    if (bytecode[0] !== 0x6a) return undefined;
+    const data: string[] = [];
+    let offset = 1; // Skip OP_RETURN opcode
+    while (offset < bytecode.length) {
+      const opcode = bytecode[offset];
+      if (opcode === 0x6a) break; // Another OP_RETURN, shouldn't happen
+      if (opcode < 0x4c) {
+        // Direct push of 0-75 bytes
+        const length = opcode;
+        if (offset + 1 + length <= bytecode.length) {
+          data.push(new TextDecoder().decode(bytecode.slice(offset + 1, offset + 1 + length)));
+          offset += 1 + length;
+        } else {
+          break;
+        }
+      } else if (opcode === 0x4c) {
+        // PUSHDATA1
+        const length = bytecode[offset + 1];
+        if (offset + 2 + length <= bytecode.length) {
+          data.push(new TextDecoder().decode(bytecode.slice(offset + 2, offset + 2 + length)));
+          offset += 2 + length;
+        } else {
+          break;
+        }
+      } else {
+        // For other opcodes, just stop parsing
+        break;
+      }
+    }
+    return data;
+  };
 
   return {
     locktime: transaction.locktime,
@@ -20,8 +53,8 @@ const decodeTransaction = (txHex: string) => {
       unlockingBytecode: val.unlockingBytecode
       })),
     outputs: transaction.outputs.map(val => ({
-      data: val.lockingBytecode[0] === 0x6a ? OpReturnData.parse(binToHex(val.lockingBytecode)) : undefined,
-      address: val.lockingBytecode[0] === 0x6a ? undefined : lockingBytecodeToCashAddress(val.lockingBytecode, "bchtest") as string,
+      data: parseOpReturnData(val.lockingBytecode),
+      address: val.lockingBytecode[0] === 0x6a ? undefined : lockingBytecodeToCashAddress({ bytecode: val.lockingBytecode, prefix: "bchtest" }) as string,
       satoshis: Number(val.valueSatoshis),
       token: val.token ? {
         amount: val.token.amount,
@@ -480,7 +513,6 @@ describe('tokens', () => {
       address: "bchtest:qzy2xp7p0sxpkspgpmgud5y060uw8d5w6y94n2hxxv",
       wif: "cPVDKBRg4qgpqUd86KvPU4gyA3YjCYGmuyMrcsSN479WUFS6dy29"
     }});
-
     expect(result.success).toBe(true);
     const transaction = decodeTransaction(result.transaction!);
     expect(transaction.inputs.length).toBe(2);

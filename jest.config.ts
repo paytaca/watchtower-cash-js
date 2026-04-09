@@ -9,7 +9,16 @@ export default {
         useESM: true,
       },
     ],
+    "^.+\\.js$": [
+      "ts-jest",
+      {
+        useESM: true,
+      },
+    ],
   },
+  transformIgnorePatterns: [
+    "node_modules/(?!(@bitauth/libauth)/)",
+  ],
   testEnvironment: "node",
   verbose: true,
   maxConcurrency: 1,

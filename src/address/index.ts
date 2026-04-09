@@ -1,14 +1,15 @@
-import { CashAddressNetworkPrefix, encodeCashAddress, CashAddressType, decodeCashAddressFormat, decodeCashAddressFormatWithoutPrefix, decodeCashAddressVersionByte, cashAddressTypeBitsToType } from "@bitauth/libauth";
-
-import BCHJS from "@psf/bch-js";
-const bchjs = new BCHJS()
-
-
-export enum SLPNetworkPrefix {
-  mainnet = "simpleledger",
-  testnet = "slptest",
-  regtest = "slpreg"
-}
+import {
+  CashAddressNetworkPrefix,
+  encodeCashAddress,
+  CashAddressType,
+  decodeCashAddressFormat,
+  decodeCashAddressFormatWithoutPrefix,
+  decodeCashAddressVersionByte,
+  cashAddressTypeBitsToType,
+  decodeBase58AddressFormat,
+  cashAddressToLockingBytecode,
+  lockingBytecodeToBase58Address
+} from "@bitauth/libauth";
 
 export default class Address {
   constructor (public address) {
@@ -28,34 +29,48 @@ export default class Address {
 
   isLegacyAddress () {
     try {
-      return bchjs.Address.isLegacyAddress(this.address)
+      const result = decodeBase58AddressFormat(this.address);
+      return typeof result !== "string";
     } catch {
       return false;
     }
   }
 
   isP2SH() {
-    const decoded = this._decodeCashaddr(this.address);
-    return [CashAddressType.p2sh, CashAddressType.p2shWithTokens].includes(decoded.type);
+    try {
+      const decoded = this._decodeCashaddr(this.address);
+      return [CashAddressType.p2sh, CashAddressType.p2shWithTokens].includes(decoded.type);
+    } catch {
+      return false;
+    }
   }
 
   toLegacyAddress () {
-    return bchjs.Address.toLegacyAddress(this.toCashAddress())
+    if (this.isLegacyAddress()) {
+      return this.address;
+    }
+    const cashAddr = this.toCashAddress();
+    const result = cashAddressToLockingBytecode(cashAddr);
+    if (typeof result === "string") {
+      throw new Error(result);
+    }
+    const network = result.prefix === CashAddressNetworkPrefix.testnet ? "testnet" : "mainnet";
+    return lockingBytecodeToBase58Address(result.bytecode, network);
   }
 
   toCashAddress () {
     const decoded = this._decodeCashaddr(this.address);
-    const network = Object.keys(CashAddressNetworkPrefix)[Object.values(CashAddressNetworkPrefix).findIndex(val => val === decoded.prefix)] ?? Object.keys(SLPNetworkPrefix)[Object.values(SLPNetworkPrefix).findIndex(val => val === decoded.prefix)];
+    const network = Object.keys(CashAddressNetworkPrefix)[Object.values(CashAddressNetworkPrefix).findIndex(val => val === decoded.prefix)];
     const type = decoded.type === CashAddressType.p2pkhWithTokens ? CashAddressType.p2pkh : (
       decoded.type === CashAddressType.p2shWithTokens ? CashAddressType.p2sh : decoded.type
     )
-    return encodeCashAddress(CashAddressNetworkPrefix[network], type, decoded.payload);
+    return encodeCashAddress({ prefix: CashAddressNetworkPrefix[network], type, payload: decoded.payload }).address;
   }
 
   isCashAddress () {
     try {
       const decoded = this._decodeCashaddr(this.address);
-      return Object.values(CashAddressNetworkPrefix).includes(decoded.prefix as any) || Object.values(SLPNetworkPrefix).includes(decoded.prefix as any);
+      return Object.values(CashAddressNetworkPrefix).includes(decoded.prefix as any);
     } catch {
       return false;
     }
@@ -72,11 +87,11 @@ export default class Address {
 
   toTokenAddress () {
     const decoded = this._decodeCashaddr(this.address);
-    const network = Object.keys(CashAddressNetworkPrefix)[Object.values(CashAddressNetworkPrefix).findIndex(val => val === decoded.prefix)] ?? Object.keys(SLPNetworkPrefix)[Object.values(SLPNetworkPrefix).findIndex(val => val === decoded.prefix)];
+    const network = Object.keys(CashAddressNetworkPrefix)[Object.values(CashAddressNetworkPrefix).findIndex(val => val === decoded.prefix)];
     const type = decoded.type === CashAddressType.p2pkh ? CashAddressType.p2pkhWithTokens : (
       decoded.type === CashAddressType.p2sh ? CashAddressType.p2shWithTokens : decoded.type
     )
-    return encodeCashAddress(CashAddressNetworkPrefix[network], type, decoded.payload);
+    return encodeCashAddress({ prefix: CashAddressNetworkPrefix[network], type, payload: decoded.payload }).address;
   }
 
   isMainnetCashAddress () {
@@ -97,41 +112,6 @@ export default class Address {
     }
   }
 
-  isSLPAddress () {
-    try {
-      const decoded = this._decodeCashaddr(this.address);
-      return Object.values(SLPNetworkPrefix).includes(decoded.prefix as any);
-    } catch {
-      return false;
-    }
-  }
-
-  toSLPAddress () {
-    const decoded = this._decodeCashaddr(this.toCashAddress());
-    const network = Object.keys(CashAddressNetworkPrefix)[Object.values(CashAddressNetworkPrefix).findIndex(val => val === decoded.prefix)] ?? Object.keys(SLPNetworkPrefix)[Object.values(SLPNetworkPrefix).findIndex(val => val === decoded.prefix)];
-    return encodeCashAddress(SLPNetworkPrefix[network], decoded.type, decoded.payload);
-  }
-
-  isMainnetSLPAddress () {
-    try {
-      const decoded = this._decodeCashaddr(this.address);
-      const network = Object.keys(SLPNetworkPrefix)[Object.values(SLPNetworkPrefix).findIndex(val => val === decoded.prefix)];
-      return Object.values(SLPNetworkPrefix).includes(decoded.prefix as any) && network === "mainnet";
-    } catch {
-      return false;
-    }
-  }
-
-  isTestnetSLPAddress () {
-    try {
-      const decoded = this._decodeCashaddr(this.address);
-      const network = Object.keys(SLPNetworkPrefix)[Object.values(SLPNetworkPrefix).findIndex(val => val === decoded.prefix)];
-      return Object.values(SLPNetworkPrefix).includes(decoded.prefix as any) && network === "testnet";
-    } catch {
-      return false;
-    }
-  }
-
   isValidBCHAddress (isChipnet = false) {
     if (isChipnet) {
       if (this.isLegacyAddress()) {
@@ -142,18 +122,6 @@ export default class Address {
     } else {
       return this.isCashAddress() || this.isTokenAddress();
     }
-    // const isBCHAddr = this.isCashAddress()
-    // if (isChipnet)
-    //   return isBCHAddr && this.isTestnetCashAddress()
-    // return isBCHAddr && this.isMainnetCashAddress()
-  }
-
-  isValidSLPAddress (isChipnet = false) {
-    return this.isSLPAddress()
-    // const isSLPAddr = this.isSLPAddress()
-    // if (isChipnet)
-    //   return isSLPAddr && this.isTestnetSLPAddress()
-    // return isSLPAddr && this.isMainnetSLPAddress()
   }
 
   private _decodeCashaddr(address: string): {
@@ -163,15 +131,20 @@ export default class Address {
     type: CashAddressType;
 } {
     let result: any;
-    // If legacy address convert first to cash address
     if (this.isLegacyAddress()) {
-      address = bchjs.Address.toCashAddress(address)
+      const legacyResult = decodeBase58AddressFormat(address);
+      if (typeof legacyResult === "string") {
+        throw new Error(legacyResult);
+      }
+      const network = legacyResult.version === 0 ? CashAddressNetworkPrefix.mainnet : 
+                      legacyResult.version === 5 ? CashAddressNetworkPrefix.mainnet :
+                      CashAddressNetworkPrefix.testnet;
+      const type = legacyResult.version === 0 || legacyResult.version === 111 ? CashAddressType.p2pkh : CashAddressType.p2sh;
+      address = encodeCashAddress({ prefix: network, type, payload: legacyResult.payload }).address;
     }
-    // If the address has a prefix decode it as is
     if (address.includes(":")) {
       result = decodeCashAddressFormat(address);
     } else {
-      // otherwise, derive the network from the address without prefix
       result = decodeCashAddressFormatWithoutPrefix(address);
     }
 

@@ -1,8 +1,7 @@
 const Watchtower = require('../../src')
 const sha256 = require('js-sha256')
-const BCHJS = require('@psf/bch-js')
-
-const bchjs = new BCHJS()
+const { mnemonicToSeedSync } = require('bip39')
+const { deriveHdPrivateNodeFromSeed, deriveHdPath, secp256k1, hash160, encodeCashAddress, CashAddressType, CashAddressNetworkPrefix } = require('@bitauth/libauth')
 
 function getWalletHash (mnemonic, derivationPath) {
   const mnemonicHash = sha256(mnemonic)
@@ -11,17 +10,20 @@ function getWalletHash (mnemonic, derivationPath) {
   return walletHash
 }
 
-async function _getChildNode (mnemonic, derivationPath, index) {
-  const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
-  const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
-  const childNode = masterHDNode.derivePath(derivationPath + '/' + index)
-  return childNode
-}
-
-async function getAddress (mnemonic, derivationPath, index) {
-  const childNode = await _getChildNode(mnemonic, derivationPath, index)
-  const address = bchjs.HDNode.toCashAddress(childNode)
-  return address
+function getAddress (mnemonic, derivationPath, index) {
+  const seedBuffer = mnemonicToSeedSync(mnemonic)
+  const masterHDNode = deriveHdPrivateNodeFromSeed(seedBuffer)
+  if (typeof masterHDNode === 'string') throw new Error(masterHDNode)
+  const childNode = deriveHdPath(masterHDNode, derivationPath + '/' + index)
+  if (typeof childNode === 'string') throw new Error(childNode)
+  const publicKeyCompressed = secp256k1.derivePublicKeyCompressed(childNode.privateKey)
+  if (typeof publicKeyCompressed === 'string') throw new Error(publicKeyCompressed)
+  const pubKeyHash = hash160(publicKeyCompressed)
+  return encodeCashAddress({
+    prefix: CashAddressNetworkPrefix.mainnet,
+    type: CashAddressType.p2pkh,
+    payload: pubKeyHash
+  }).address
 }
 
 const mnemonic = 'the quick brown fox jumps over the lazy dog' // Replace with actual mnemonic
@@ -32,7 +34,7 @@ const projectId = '643da925-bfd4-49da-930d-9d808a7c46fe' // Replace with project
 
 async function execute () {
   const walletIndex = 0
-  const address = await getAddress(mnemonic, derivationPath, walletIndex)
+  const address = getAddress(mnemonic, derivationPath, walletIndex)
   console.log('Wallet hash:', walletHash)
   console.log('Address:', address)
 
