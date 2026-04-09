@@ -1,15 +1,13 @@
 import BCH from './bch/index.js';
-import SLP from './slp/index.js';
 import Wallet from './wallet/index.js';
 import Address from './address/index.js';
 import axios from 'axios';
 
-export { BCH, SLP, Wallet, Address };
+export { BCH, Wallet, Address };
 
 export default class Watchtower {
   _baseUrl: string
   BCH: any
-  SLP: any
   Wallet: any
 
   constructor (isChipnet = false) {
@@ -20,7 +18,6 @@ export default class Watchtower {
     }
 
     this.BCH = new BCH(this._baseUrl, isChipnet)
-    this.SLP = new SLP(this._baseUrl, isChipnet)
     this.Wallet = new Wallet(this._baseUrl)
   }
 

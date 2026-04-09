@@ -1,6 +1,3 @@
-import slpMdm from 'slp-mdm';
-import BigNumber from 'bignumber.js'
-
 const pushdata = (buf) => {
   if (buf.length === 0) {
     return Buffer.from([0x4C, 0x00]);
