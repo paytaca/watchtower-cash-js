@@ -526,9 +526,11 @@ export default class BCH {
         });
       }
 
+      const tokenDustLimit = this.getDustLimit(true) / 1e8
       recipients.forEach(function (recipient) {
         if (recipient.tokenAmount) {
-          recipient.amount = Number(cashtokensUtxos.utxos[0].value) / 1e8 // convert to BCH
+          const tokenUtxoBch = Number(cashtokensUtxos.utxos[0].value) / 1e8
+          recipient.amount = Math.max(tokenUtxoBch, tokenDustLimit)
         }
       })
 
