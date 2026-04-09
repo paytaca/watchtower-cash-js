@@ -4,8 +4,8 @@ import OpReturnGenerator from "./op_returns.js"
 
 import { 
   TransactionTemplateFixed, 
-  authenticationTemplateP2pkhNonHd, 
-  authenticationTemplateToCompilerBCH, 
+  walletTemplateP2pkhNonHd, 
+  walletTemplateToCompilerBCH, 
   binToHex, 
   cashAddressToLockingBytecode as _cashAddressToLockingBytecode, 
   deriveHdPath, 
@@ -13,14 +13,13 @@ import {
   encodeTransaction, 
   generateTransaction, 
   hexToBin, 
-  importAuthenticationTemplate, 
+  importWalletTemplate, 
   decodePrivateKeyWif, 
   secp256k1, 
   hash160, 
   encodeCashAddress, 
   CashAddressType, 
   CashAddressNetworkPrefix, 
-  TransactionGenerationError, 
   Output
 } from "@bitauth/libauth";
 import { mnemonicToSeedSync } from "bip39";
@@ -149,7 +148,11 @@ const privateKeyToCashaddress = (privateKey: Uint8Array, isChipnet: boolean): st
     throw new Error(publicKeyCompressed);
   }
   const pubKeyHash = hash160(publicKeyCompressed);
-  return encodeCashAddress(isChipnet ? CashAddressNetworkPrefix.testnet : CashAddressNetworkPrefix.mainnet, CashAddressType.p2pkh, pubKeyHash);
+  return encodeCashAddress({
+    prefix: isChipnet ? CashAddressNetworkPrefix.testnet : CashAddressNetworkPrefix.mainnet,
+    type: CashAddressType.p2pkh,
+    payload: pubKeyHash
+  }).address;
 }
 
 export default class BCH {
@@ -320,7 +323,7 @@ export default class BCH {
   // Reworked to return private key instead of WIF
   retrievePrivateKey(mnemonic: string, derivationPath: string, addressPath: string): Uint8Array {
     const seedBuffer = mnemonicToSeedSync(mnemonic);
-    const masterHDNode = deriveHdPrivateNodeFromSeed(seedBuffer, true);
+    const masterHDNode = deriveHdPrivateNodeFromSeed(seedBuffer);
     const child = deriveHdPath(masterHDNode, `${derivationPath}/${addressPath}`);
     if (typeof child === "string") {
       throw new Error(child);
@@ -439,8 +442,8 @@ export default class BCH {
       handle = sender.address!
     }
 
-    const template = importAuthenticationTemplate(
-      authenticationTemplateP2pkhNonHd
+    const template = importWalletTemplate(
+      walletTemplateP2pkhNonHd
     );
     if (typeof template === "string") {
       return {
@@ -449,7 +452,7 @@ export default class BCH {
       }
     }
 
-    const compiler = authenticationTemplateToCompilerBCH(template);
+    const compiler = walletTemplateToCompilerBCH(template);
 
     const transaction: TransactionTemplateFixed<typeof compiler> = {
       inputs: [],
@@ -691,7 +694,7 @@ export default class BCH {
     if (!estimatedTransaction.success) {
       return {
         success: false,
-        error: `${JSON.stringify((estimatedTransaction as TransactionGenerationError).errors, null, 2)}`
+        error: `${JSON.stringify((estimatedTransaction as any).errors, null, 2)}`
       }
     }
     const estimatedTransactionBin = encodeTransaction(estimatedTransaction.transaction);
@@ -815,7 +818,7 @@ export default class BCH {
     if (!result.success) {
       return {
         success: false,
-        error: `${JSON.stringify((result as TransactionGenerationError).errors, null, 2)}`
+        error: `${JSON.stringify((result as any).errors, null, 2)}`
       }
     }
     const hex = binToHex(encodeTransaction(result.transaction));

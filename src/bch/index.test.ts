@@ -1,7 +1,6 @@
 import { decodeTransaction as _decodeTransaction, binToHex, hexToBin, lockingBytecodeToCashAddress } from "@bitauth/libauth";
 import BCH, { SendRequest } from "../bch";
 import { setupAxiosMock } from "../test/axios";
-import { OpReturnData } from "mainnet-js"
 import Wallet from "../wallet";
 
 const decodeTransaction = (txHex: string) => {
@@ -20,8 +19,8 @@ const decodeTransaction = (txHex: string) => {
       unlockingBytecode: val.unlockingBytecode
       })),
     outputs: transaction.outputs.map(val => ({
-      data: val.lockingBytecode[0] === 0x6a ? OpReturnData.parse(binToHex(val.lockingBytecode)) : undefined,
-      address: val.lockingBytecode[0] === 0x6a ? undefined : lockingBytecodeToCashAddress(val.lockingBytecode, "bchtest") as string,
+      data: val.lockingBytecode[0] === 0x6a ? binToHex(val.lockingBytecode) : undefined,
+      address: val.lockingBytecode[0] === 0x6a ? undefined : lockingBytecodeToCashAddress({ bytecode: val.lockingBytecode, prefix: "bchtest" }) as string,
       satoshis: Number(val.valueSatoshis),
       token: val.token ? {
         amount: val.token.amount,

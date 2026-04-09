@@ -1,5 +1,4 @@
 import Address from "./index.js";
-import OldAddress from "./oldAddress";
 
 test('Test Address', () => {
   const address = new Address("bitcoincash:qqs7szj7r600ykzfpjs6xl8dj2u06as43qky0luk4s");
@@ -86,64 +85,4 @@ test('Test Address', () => {
   expect(testnetTokenAddr.isValidSLPAddress()).toBe(false);
   expect(testnetTokenAddr.toSLPAddress()).toBe("slptest:qqs7szj7r600ykzfpjs6xl8dj2u06as43qfzvrykq3");
   expect(testnetTokenAddr.toTokenAddress()).toBe("bchtest:zqs7szj7r600ykzfpjs6xl8dj2u06as43q4ucxs8dl");
-})
-
-test('Test Regression', () => {
-  const address = new Address("bitcoincash:qqs7szj7r600ykzfpjs6xl8dj2u06as43qky0luk4s");
-  const oldAddress = new OldAddress("bitcoincash:qqs7szj7r600ykzfpjs6xl8dj2u06as43qky0luk4s");
-  expect(address.toCashAddress()).toBe("bitcoincash:qqs7szj7r600ykzfpjs6xl8dj2u06as43qky0luk4s");
-  expect(address.isCashAddress()).toBe(true);
-  expect(address.isLegacyAddress()).toBe(false);
-  expect(address.isMainnetCashAddress()).toBe(true);
-  expect(address.isMainnetSLPAddress()).toBe(false);
-  expect(address.isSLPAddress()).toBe(false);
-  expect(address.isTestnetCashAddress()).toBe(false);
-  expect(address.isTestnetSLPAddress()).toBe(false);
-  expect(address.isValidBCHAddress()).toBe(true);
-  expect(address.isValidSLPAddress()).toBe(false);
-  expect(address.toSLPAddress()).toBe("simpleledger:qqs7szj7r600ykzfpjs6xl8dj2u06as43q6lyyfktw");
-  expect(address.toTokenAddress()).toBe("bitcoincash:zqs7szj7r600ykzfpjs6xl8dj2u06as43q3wupjs2r");
-
-  const slpAddr = new Address(address.toSLPAddress());
-  const oldSlpAddr = new OldAddress(oldAddress.toSLPAddress());
-  // expect(slpAddr.toCashAddress()).toBe(oldSlpAddr.toCashAddress()); //-- divergence
-  expect(slpAddr.isCashAddress()).toBe(oldSlpAddr.isCashAddress());
-  expect(slpAddr.isLegacyAddress()).toBe(oldSlpAddr.isLegacyAddress());
-  // expect(slpAddr.isMainnetCashAddress()).toBe(oldSlpAddr.isMainnetCashAddress()); // -- divergence
-  expect(slpAddr.isMainnetSLPAddress()).toBe(oldSlpAddr.isMainnetSLPAddress());
-  expect(slpAddr.isSLPAddress()).toBe(oldSlpAddr.isSLPAddress());
-  // expect(slpAddr.isTestnetCashAddress()).toBe(oldSlpAddr.isTestnetCashAddress()); // -- divergence
-  expect(slpAddr.isTestnetSLPAddress()).toBe(oldSlpAddr.isTestnetSLPAddress());
-  // expect(slpAddr.isValidBCHAddress()).toBe(oldSlpAddr.isValidBCHAddress()); // -- divergence
-  expect(slpAddr.isValidSLPAddress()).toBe(oldSlpAddr.isValidSLPAddress());
-  expect(slpAddr.toSLPAddress()).toBe(oldSlpAddr.toSLPAddress());
-
-  const testnetAddress = new Address("bchtest:qqs7szj7r600ykzfpjs6xl8dj2u06as43qjktc7pjv");
-  const oldTestnetAddress = new OldAddress("bchtest:qqs7szj7r600ykzfpjs6xl8dj2u06as43qjktc7pjv");
-  expect(testnetAddress.toCashAddress()).toBe(oldTestnetAddress.toCashAddress());
-  expect(testnetAddress.isCashAddress()).toBe(oldTestnetAddress.isCashAddress());
-  expect(testnetAddress.isLegacyAddress()).toBe(oldTestnetAddress.isLegacyAddress());
-  expect(testnetAddress.isMainnetCashAddress()).toBe(oldTestnetAddress.isMainnetCashAddress());
-  expect(testnetAddress.isMainnetSLPAddress()).toBe(oldTestnetAddress.isMainnetSLPAddress());
-  expect(testnetAddress.isSLPAddress()).toBe(oldTestnetAddress.isSLPAddress());
-  expect(testnetAddress.isTestnetCashAddress()).toBe(oldTestnetAddress.isTestnetCashAddress());
-  // console.log(testnetAddress.isTestnetSLPAddress(), oldTestnetAddress.isTestnetSLPAddress())
-  // expect(testnetAddress.isTestnetSLPAddress()).toBe(oldTestnetAddress.isTestnetSLPAddress());
-  // expect(testnetAddress.isValidBCHAddress()).toBe(oldTestnetAddress.isValidBCHAddress());
-  // expect(testnetAddress.isValidSLPAddress()).toBe(oldTestnetAddress.isValidSLPAddress());
-  expect(testnetAddress.toSLPAddress()).toBe(oldTestnetAddress.toSLPAddress());
-
-  const testnetSlpAddr = new Address(testnetAddress.toSLPAddress());
-  const oldTestnetSlpAddr = new OldAddress(oldTestnetAddress.toSLPAddress());
-  // expect(testnetSlpAddr.toCashAddress()).toBe(oldTestnetSlpAddr.toCashAddress());
-  expect(testnetSlpAddr.isCashAddress()).toBe(oldTestnetSlpAddr.isCashAddress());
-  expect(testnetSlpAddr.isLegacyAddress()).toBe(oldTestnetSlpAddr.isLegacyAddress());
-  // expect(testnetSlpAddr.isMainnetCashAddress()).toBe(oldTestnetSlpAddr.isMainnetCashAddress());
-  expect(testnetSlpAddr.isMainnetSLPAddress()).toBe(oldTestnetSlpAddr.isMainnetSLPAddress());
-  expect(testnetSlpAddr.isSLPAddress()).toBe(oldTestnetSlpAddr.isSLPAddress());
-  // expect(testnetSlpAddr.isTestnetCashAddress()).toBe(oldTestnetSlpAddr.isTestnetCashAddress());
-  expect(testnetSlpAddr.isTestnetSLPAddress()).toBe(oldTestnetSlpAddr.isTestnetSLPAddress());
-  // expect(testnetSlpAddr.isValidBCHAddress()).toBe(oldTestnetSlpAddr.isValidBCHAddress());
-  // expect(testnetSlpAddr.isValidSLPAddress()).toBe(oldTestnetSlpAddr.isValidSLPAddress());
-  expect(testnetSlpAddr.toSLPAddress()).toBe(oldTestnetSlpAddr.toSLPAddress());
 })

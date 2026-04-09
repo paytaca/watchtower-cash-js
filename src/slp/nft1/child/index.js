@@ -1,10 +1,63 @@
 import axios from 'axios'
-import BCHJS from "@psf/bch-js"
 import BigNumber from 'bignumber.js'
 import OpReturnGenerator from './op_returns.js'
 import Address from '../../../address/index.js'
+import {
+  walletTemplateP2pkhNonHd,
+  walletTemplateToCompilerBCH,
+  binToHex,
+  cashAddressToLockingBytecode,
+  decodePrivateKeyWif,
+  deriveHdPath,
+  deriveHdPrivateNodeFromSeed,
+  encodeTransaction,
+  generateTransaction,
+  hexToBin,
+  importWalletTemplate,
+  secp256k1,
+  hash160,
+  encodeCashAddress,
+  CashAddressType,
+  CashAddressNetworkPrefix
+} from '@bitauth/libauth'
+import { mnemonicToSeedSync } from 'bip39'
 
-const bchjs = new BCHJS()
+function getNetworkPrefix(isChipnet) {
+  return isChipnet ? CashAddressNetworkPrefix.testnet : CashAddressNetworkPrefix.mainnet
+}
+
+function privateKeyToCashAddress(privateKey, isChipnet) {
+  const publicKeyCompressed = secp256k1.derivePublicKeyCompressed(privateKey)
+  if (typeof publicKeyCompressed === 'string') {
+    throw new Error(publicKeyCompressed)
+  }
+  const pubKeyHash = hash160(publicKeyCompressed)
+  return encodeCashAddress({
+    prefix: getNetworkPrefix(isChipnet),
+    type: CashAddressType.p2pkh,
+    payload: pubKeyHash
+  }).address
+}
+
+function toLegacyAddress(address) {
+  return new Address(address).toLegacyAddress()
+}
+
+function lockingBytecodeFromAddress(address) {
+  const result = cashAddressToLockingBytecode(address)
+  if (typeof result === 'string') {
+    throw new Error(result)
+  }
+  return result.bytecode
+}
+
+function estimateByteCount(inputsCount, outputsCount, opReturnSize = 0) {
+  const baseSize = 10 + 
+    (inputsCount * 148) + 
+    (outputsCount * 34) + 
+    opReturnSize
+  return baseSize
+}
 
 export default class SlpNft1Child {
 
@@ -12,7 +65,7 @@ export default class SlpNft1Child {
     this.isChipnet = isChipnet
     this._api = axios.create({
       baseURL: apiBaseUrl,
-      timeout: 60 * 1000  // 1 minute
+      timeout: 60 * 1000
     })
     this.dustLimit = 546
     this.tokenType = 65
@@ -107,11 +160,17 @@ export default class SlpNft1Child {
     }
   }
 
-  async retrievePrivateKey (mnemonic, derivationPath, addressPath) {
-    const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
-    const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
-    const childNode = masterHDNode.derivePath(derivationPath + '/' + addressPath)
-    return bchjs.HDNode.toWIF(childNode)
+  retrievePrivateKey (mnemonic, derivationPath, addressPath) {
+    const seedBuffer = mnemonicToSeedSync(mnemonic)
+    const masterHDNode = deriveHdPrivateNodeFromSeed(seedBuffer)
+    if (typeof masterHDNode === 'string') {
+      throw new Error(masterHDNode)
+    }
+    const childNode = deriveHdPath(masterHDNode, derivationPath + '/' + addressPath)
+    if (typeof childNode === 'string') {
+      throw new Error(childNode)
+    }
+    return childNode.privateKey
   }
 
   async broadcastTransaction (txHex, priceId) {
@@ -171,17 +230,25 @@ export default class SlpNft1Child {
       }
     }
 
-    const keyPairs = []
+    const template = importWalletTemplate(walletTemplateP2pkhNonHd)
+    if (typeof template === 'string') {
+      return { success: false, error: 'Transaction template error' }
+    }
+    const compiler = walletTemplateToCompilerBCH(template)
 
-    let transactionBuilder = new bchjs.TransactionBuilder()
-    let outputsCount = 0
-    let inputsCount = 0
-    
+    const transaction = {
+      inputs: [],
+      outputs: [],
+      locktime: 0,
+      version: 2
+    }
+
     let totalInputSats = new BigNumber(0)
     let totalOutputSats = new BigNumber(0)
-    let utxoKeyPair
+    const privateKeys = []
 
     for (const nftUtxo of nftUtxos.utxos) {
+      let inputPrivKey
       if (walletHash) {
         let addressPath
         if (nftUtxo.address_path) {
@@ -189,44 +256,56 @@ export default class SlpNft1Child {
         } else {
           addressPath = nftUtxo.wallet_index
         }
-        const utxoPkWif = await this.retrievePrivateKey(
+        inputPrivKey = this.retrievePrivateKey(
           sender.mnemonic,
           sender.derivationPath,
           addressPath
-          )
-          utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
+        )
       } else {
-        utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+        const decodeResult = decodePrivateKeyWif(sender.wif)
+        if (typeof decodeResult === 'string') {
+          return { success: false, error: decodeResult }
+        }
+        inputPrivKey = decodeResult.privateKey
       }
-      transactionBuilder.addInput(nftUtxo.tx_hash, nftUtxo.tx_pos)
-      keyPairs.push(utxoKeyPair)
+      privateKeys.push(inputPrivKey)
       totalInputSats = totalInputSats.plus(nftUtxo.value)
-      inputsCount += 1
+
+      transaction.inputs.push({
+        outpointIndex: nftUtxo.tx_pos,
+        outpointTransactionHash: hexToBin(nftUtxo.tx_hash),
+        sequenceNumber: 0,
+        unlockingBytecode: {
+          compiler,
+          data: {
+            keys: { privateKeys: { key: inputPrivKey } }
+          },
+          valueSatoshis: BigInt(nftUtxo.value),
+          script: 'unlock'
+        }
+      })
     }
-    inputsCount += 1 // fee funder input
  
     const nftOpRetGen = new OpReturnGenerator()
     const nftOpReturn = nftOpRetGen.generateSendOpReturn(nftUtxos.utxos)
 
-    transactionBuilder.addOutput(nftOpReturn, 0)
-    transactionBuilder.addOutput(
-      bchjs.SLP.Address.toLegacyAddress(recipient),
-      this.dustLimit
-    )
+    transaction.outputs.push({
+      lockingBytecode: nftOpReturn,
+      valueSatoshis: 0n
+    })
+    transaction.outputs.push({
+      lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(recipient)),
+      valueSatoshis: BigInt(this.dustLimit)
+    })
     totalOutputSats = totalOutputSats.plus(this.dustLimit)
-    outputsCount += 2 // dust output and possible change output
 
-    let byteCount = bchjs.BitcoinCash.getByteCount(
-      {
-        P2PKH: inputsCount
-      },
-      {
-        P2PKH: outputsCount
-      }
-    )
-    byteCount += nftOpReturn.length  // Account for NFT OP_RETURN data byte count
-    const feeRate = 1.2 // 1.2 sats/byte fee rate
+    const inputsCount = nftUtxos.utxos.length + 1
+    const outputsCount = transaction.outputs.length + 1
+    const opReturnSize = nftOpReturn.length
+    let byteCount = estimateByteCount(inputsCount, outputsCount, opReturnSize)
+    const feeRate = 1.2
     let txFee = Math.ceil(byteCount * feeRate)
+
     let feeFunderHandle
     if (feeFunder.walletHash) {
       feeFunderHandle = 'wallet:' + feeFunder.walletHash
@@ -251,9 +330,9 @@ export default class SlpNft1Child {
     }
 
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
-      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
-      let feeFunderutxoKeyPair
+      
+      let inputPrivKey
       if (feeFunder.walletHash) {
         let addressPath
         if (bchUtxos.utxos[i].address_path) {
@@ -261,32 +340,46 @@ export default class SlpNft1Child {
         } else {
           addressPath = bchUtxos.utxos[i].wallet_index
         }
-        const utxoPkWif = await this.retrievePrivateKey(
+        inputPrivKey = this.retrievePrivateKey(
           feeFunder.mnemonic,
           feeFunder.derivationPath,
           addressPath
         )
-        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
       } else {
-        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+        const decodeResult = decodePrivateKeyWif(feeFunder.wif)
+        if (typeof decodeResult === 'string') {
+          return { success: false, error: decodeResult }
+        }
+        inputPrivKey = decodeResult.privateKey
       }
-      keyPairs.push(feeFunderutxoKeyPair)
+      privateKeys.push(inputPrivKey)
 
-      // change will always be on the BCH fee funder
-      // there are no such thing as change using an NFT transaction token
       if (!changeAddress) {
-        changeAddress = bchjs.ECPair.toCashAddress(feeFunderutxoKeyPair)
+        changeAddress = privateKeyToCashAddress(inputPrivKey, this.isChipnet)
       }
+
+      transaction.inputs.push({
+        outpointIndex: bchUtxos.utxos[i].tx_pos,
+        outpointTransactionHash: hexToBin(bchUtxos.utxos[i].tx_hash),
+        sequenceNumber: 0,
+        unlockingBytecode: {
+          compiler,
+          data: {
+            keys: { privateKeys: { key: inputPrivKey } }
+          },
+          valueSatoshis: BigInt(bchUtxos.utxos[i].value),
+          script: 'unlock'
+        }
+      })
     }
 
-    // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
     
     if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
-      transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(changeAddress),
-        parseInt(remainderSats)
-      )
+      transaction.outputs.push({
+        lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(changeAddress)),
+        valueSatoshis: BigInt(remainderSats)
+      })
     } else {
       const remainderSatsNum = remainderSats.toNumber()
       if (remainderSatsNum < 0) {
@@ -300,23 +393,14 @@ export default class SlpNft1Child {
       }
     }
 
-    const combinedUtxos = nftUtxos.utxos.concat(bchUtxos.utxos)
-
-    // Sign each token UTXO being consumed.
-    let redeemScript
-    for (let i = 0; i < combinedUtxos.length; i++) {
-      const utxo = combinedUtxos[i]
-      transactionBuilder.sign(
-        i,
-        keyPairs[i],
-        redeemScript,
-        transactionBuilder.hashTypes.SIGHASH_ALL,
-        parseInt(utxo.value)
-      )
+    const result = generateTransaction(transaction)
+    if (!result.success) {
+      return {
+        success: false,
+        error: JSON.stringify((result).errors, null, 2)
+      }
     }
-
-    const tx = transactionBuilder.build()
-    const hex = tx.toHex()
+    const hex = binToHex(encodeTransaction(result.transaction))
 
     if (broadcast) {
       try {
@@ -333,5 +417,4 @@ export default class SlpNft1Child {
       }
     }
   }
-
 }

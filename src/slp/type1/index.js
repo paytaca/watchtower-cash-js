@@ -1,13 +1,67 @@
 import axios from 'axios'
-import BCHJS from "@psf/bch-js"
 import BigNumber from 'bignumber.js'
 import OpReturnGenerator from './op_returns.js'
 import Address from '../../address/index.js'
 import NftOpReturnGenerator from '../nft1/parent/op_returns.js'
-
-const bchjs = new BCHJS();
+import {
+  TransactionTemplateFixed,
+  walletTemplateP2pkhNonHd,
+  walletTemplateToCompilerBCH,
+  binToHex,
+  cashAddressToLockingBytecode,
+  decodePrivateKeyWif,
+  deriveHdPath,
+  deriveHdPrivateNodeFromSeed,
+  encodeTransaction,
+  generateTransaction,
+  hexToBin,
+  importWalletTemplate,
+  secp256k1,
+  hash160,
+  encodeCashAddress,
+  CashAddressType,
+  CashAddressNetworkPrefix
+} from '@bitauth/libauth'
+import { mnemonicToSeedSync } from 'bip39'
 
 const slpOpRetGen = new OpReturnGenerator()
+
+function getNetworkPrefix(isChipnet) {
+  return isChipnet ? CashAddressNetworkPrefix.testnet : CashAddressNetworkPrefix.mainnet
+}
+
+function privateKeyToCashAddress(privateKey, isChipnet) {
+  const publicKeyCompressed = secp256k1.derivePublicKeyCompressed(privateKey)
+  if (typeof publicKeyCompressed === 'string') {
+    throw new Error(publicKeyCompressed)
+  }
+  const pubKeyHash = hash160(publicKeyCompressed)
+  return encodeCashAddress({
+    prefix: getNetworkPrefix(isChipnet),
+    type: CashAddressType.p2pkh,
+    payload: pubKeyHash
+  }).address
+}
+
+function toLegacyAddress(address) {
+  return new Address(address).toLegacyAddress()
+}
+
+function lockingBytecodeFromAddress(address) {
+  const result = cashAddressToLockingBytecode(address)
+  if (typeof result === 'string') {
+    throw new Error(result)
+  }
+  return result.bytecode
+}
+
+function estimateByteCount(inputsCount, outputsCount, opReturnSize = 0) {
+  const baseSize = 10 + 
+    (inputsCount * 148) + 
+    (outputsCount * 34) + 
+    opReturnSize
+  return baseSize
+}
 
 export default class SlpType1 {
 
@@ -15,7 +69,7 @@ export default class SlpType1 {
     this.isChipnet = isChipnet
     this._api = axios.create({
       baseURL: apiBaseUrl,
-      timeout: 60 * 1000  // 1 minute
+      timeout: 60 * 1000
     })
     this.dustLimit = 546
   }
@@ -118,11 +172,17 @@ export default class SlpType1 {
     }
   }
 
-  async retrievePrivateKey (mnemonic, derivationPath, addressPath) {
-    const seedBuffer = await bchjs.Mnemonic.toSeed(mnemonic)
-    const masterHDNode = bchjs.HDNode.fromSeed(seedBuffer)
-    const childNode = masterHDNode.derivePath(derivationPath + '/' + addressPath)
-    return bchjs.HDNode.toWIF(childNode)
+  retrievePrivateKey (mnemonic, derivationPath, addressPath) {
+    const seedBuffer = mnemonicToSeedSync(mnemonic)
+    const masterHDNode = deriveHdPrivateNodeFromSeed(seedBuffer)
+    if (typeof masterHDNode === 'string') {
+      throw new Error(masterHDNode)
+    }
+    const childNode = deriveHdPath(masterHDNode, derivationPath + '/' + addressPath)
+    if (typeof childNode === 'string') {
+      throw new Error(childNode)
+    }
+    return childNode.privateKey
   }
 
   async broadcastTransaction (txHex, priceId) {
@@ -201,10 +261,22 @@ export default class SlpType1 {
       }
     }
 
-    const keyPairs = []
+    const template = importWalletTemplate(walletTemplateP2pkhNonHd)
+    if (typeof template === 'string') {
+      return {
+        success: false,
+        error: 'Transaction template error'
+      }
+    }
+    const compiler = walletTemplateToCompilerBCH(template)
 
-    let transactionBuilder = new bchjs.TransactionBuilder()
-    let outputsCount = 0
+    const transaction = {
+      inputs: [],
+      outputs: [],
+      locktime: 0,
+      version: 2
+    }
+
     let totalInputSats = new BigNumber(0)
     let totalOutputSats = new BigNumber(0)
     let totalInputTokens = new BigNumber(0)
@@ -213,11 +285,13 @@ export default class SlpType1 {
       return new BigNumber(recipient.amount).times(10 ** slpUtxos.tokenDecimals)
     })
 
+    const privateKeys = []
+
     for (let i = 0; i < slpUtxos.utxos.length; i++) {
-      transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(slpUtxos.utxos[i].value)
       totalInputTokens = totalInputTokens.plus(slpUtxos.utxos[i].amount)
-      let utxoKeyPair
+      
+      let inputPrivKey
       if (walletHash) {
         let addressPath
         if (slpUtxos.utxos[i].address_path) {
@@ -225,19 +299,37 @@ export default class SlpType1 {
         } else {
           addressPath = slpUtxos.utxos[i].wallet_index
         }
-        const utxoPkWif = await this.retrievePrivateKey(
+        inputPrivKey = this.retrievePrivateKey(
           sender.mnemonic,
           sender.derivationPath,
           addressPath
         )
-        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
       } else {
-        utxoKeyPair = bchjs.ECPair.fromWIF(sender.wif)
+        const decodeResult = decodePrivateKeyWif(sender.wif)
+        if (typeof decodeResult === 'string') {
+          return { success: false, error: decodeResult }
+        }
+        inputPrivKey = decodeResult.privateKey
       }
-      keyPairs.push(utxoKeyPair)
+      privateKeys.push(inputPrivKey)
+
       if (!changeAddresses.slp) {
-        changeAddresses.slp = bchjs.ECPair.toCashAddress(utxoKeyPair)
+        changeAddresses.slp = privateKeyToCashAddress(inputPrivKey, this.isChipnet)
       }
+
+      transaction.inputs.push({
+        outpointIndex: slpUtxos.utxos[i].tx_pos,
+        outpointTransactionHash: hexToBin(slpUtxos.utxos[i].tx_hash),
+        sequenceNumber: 0,
+        unlockingBytecode: {
+          compiler,
+          data: {
+            keys: { privateKeys: { key: inputPrivKey } }
+          },
+          valueSatoshis: BigInt(slpUtxos.utxos[i].value),
+          script: 'unlock'
+        }
+      })
     }
 
     let tokenRemainder = totalInputTokens.minus(slpUtxos.convertedSendAmount)
@@ -261,42 +353,35 @@ export default class SlpType1 {
         }
       )
     }
-    transactionBuilder.addOutput(slpOpRetData, 0)
-    outputsCount += 1
+    transaction.outputs.push({
+      lockingBytecode: slpOpRetData,
+      valueSatoshis: 0n
+    })
 
     const vm = this
     recipients.map(function (recipient) {
-      transactionBuilder.addOutput(
-        bchjs.SLP.Address.toLegacyAddress(recipient.address),
-        vm.dustLimit
-      )
-      outputsCount += 1
+      transaction.outputs.push({
+        lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(recipient.address)),
+        valueSatoshis: BigInt(vm.dustLimit)
+      })
       totalOutputSats = totalOutputSats.plus(vm.dustLimit)
     })
 
     if (tokenRemainder.isGreaterThan(0)) {
-      transactionBuilder.addOutput(
-        bchjs.SLP.Address.toLegacyAddress(changeAddresses.slp),
-        this.dustLimit
-      )
-      outputsCount += 1
-      totalOutputSats = totalOutputSats.plus(this.dustLimit)
+      transaction.outputs.push({
+        lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(changeAddresses.slp)),
+        valueSatoshis: BigInt(vm.dustLimit)
+      })
+      totalOutputSats = totalOutputSats.plus(vm.dustLimit)
     }
 
-    const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
-    outputsCount += 1  // Add extra for sending BCH change,if any
-
-    let byteCount = bchjs.BitcoinCash.getByteCount(
-      {
-        P2PKH: inputsCount
-      },
-      {
-        P2PKH: outputsCount
-      }
-    )
-    byteCount += slpOpRetData.length  // Account for SLP OP_RETURN data byte count
-    const feeRate = 1.2 // 1.2 sats/byte fee rate
+    const inputsCount = slpUtxos.utxos.length + 1
+    const outputsCount = transaction.outputs.length + 1
+    const opReturnSize = slpOpRetData.length
+    let byteCount = estimateByteCount(inputsCount, outputsCount, opReturnSize)
+    const feeRate = 1.2
     let txFee = Math.ceil(byteCount * feeRate)
+
     let feeFunderHandle
     if (feeFunder.walletHash) {
       feeFunderHandle = 'wallet:' + feeFunder.walletHash
@@ -320,9 +405,9 @@ export default class SlpType1 {
     }
 
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
-      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
-      let feeFunderutxoKeyPair
+      
+      let inputPrivKey
       if (feeFunder.walletHash) {
         let addressPath
         if (bchUtxos.utxos[i].address_path) {
@@ -330,29 +415,46 @@ export default class SlpType1 {
         } else {
           addressPath = bchUtxos.utxos[i].wallet_index
         }
-        const utxoPkWif = await this.retrievePrivateKey(
+        inputPrivKey = this.retrievePrivateKey(
           feeFunder.mnemonic,
           feeFunder.derivationPath,
           addressPath
         )
-        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
       } else {
-        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+        const decodeResult = decodePrivateKeyWif(feeFunder.wif)
+        if (typeof decodeResult === 'string') {
+          return { success: false, error: decodeResult }
+        }
+        inputPrivKey = decodeResult.privateKey
       }
-      keyPairs.push(feeFunderutxoKeyPair)
+      privateKeys.push(inputPrivKey)
+
       if (!changeAddresses.bch) {
-        changeAddresses.bch = bchjs.ECPair.toCashAddress(feeFunderutxoKeyPair)
+        changeAddresses.bch = privateKeyToCashAddress(inputPrivKey, this.isChipnet)
       }
+
+      transaction.inputs.push({
+        outpointIndex: bchUtxos.utxos[i].tx_pos,
+        outpointTransactionHash: hexToBin(bchUtxos.utxos[i].tx_hash),
+        sequenceNumber: 0,
+        unlockingBytecode: {
+          compiler,
+          data: {
+            keys: { privateKeys: { key: inputPrivKey } }
+          },
+          valueSatoshis: BigInt(bchUtxos.utxos[i].value),
+          script: 'unlock'
+        }
+      })
     }
 
-    // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
 
     if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
-      transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(changeAddresses.bch),
-        parseInt(remainderSats)
-      )
+      transaction.outputs.push({
+        lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(changeAddresses.bch)),
+        valueSatoshis: BigInt(remainderSats)
+      })
     } else {
       const remainderSatsNum = remainderSats.toNumber()
       if (remainderSatsNum < 0) {
@@ -366,23 +468,14 @@ export default class SlpType1 {
       }
     }
 
-    const combinedUtxos = slpUtxos.utxos.concat(bchUtxos.utxos)
-
-    // Sign each token UTXO being consumed.
-    let redeemScript
-    for (let i = 0; i < combinedUtxos.length; i++) {
-      const utxo = combinedUtxos[i]
-      transactionBuilder.sign(
-        i,
-        keyPairs[i],
-        redeemScript,
-        transactionBuilder.hashTypes.SIGHASH_ALL,
-        parseInt(utxo.value)
-      )
+    const result = generateTransaction(transaction)
+    if (!result.success) {
+      return {
+        success: false,
+        error: JSON.stringify((result).errors, null, 2)
+      }
     }
-
-    const tx = transactionBuilder.build()
-    const hex = tx.toHex()
+    const hex = binToHex(encodeTransaction(result.transaction))
 
     if (broadcast) {
       try {
@@ -473,18 +566,29 @@ export default class SlpType1 {
         error: `not enough balance in creator (${bchUtxos.cumulativeValue}) to cover the create amount (${totalSendAmountSats})`
       }
     }
-    
-    const keyPairs = []
 
-    let transactionBuilder = new bchjs.TransactionBuilder()
-    let outputsCount = 0
+    const template = importWalletTemplate(walletTemplateP2pkhNonHd)
+    if (typeof template === 'string') {
+      return { success: false, error: 'Transaction template error' }
+    }
+    const compiler = walletTemplateToCompilerBCH(template)
+
+    const transaction = {
+      inputs: [],
+      outputs: [],
+      locktime: 0,
+      version: 2
+    }
+
     let totalInput = new BigNumber(0)
     let totalOutput = new BigNumber(totalSendAmountSats)
     
+    const privateKeys = []
+
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
-      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInput = totalInput.plus(bchUtxos.utxos[i].value)
-      let utxoKeyPair
+      
+      let inputPrivKey
       if (walletHash) {
         let addressPath
         if (bchUtxos.utxos[i].address_path) {
@@ -492,31 +596,46 @@ export default class SlpType1 {
         } else {
           addressPath = bchUtxos.utxos[i].wallet_index
         }
-        const utxoPkWif = await this.retrievePrivateKey(
+        inputPrivKey = this.retrievePrivateKey(
           creator.mnemonic,
           creator.derivationPath,
           addressPath
         )
-        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
-        keyPairs.push(utxoKeyPair)
+        privateKeys.push(inputPrivKey)
         if (!changeAddress) {
-          changeAddress = bchjs.ECPair.toCashAddress(utxoKeyPair)
+          changeAddress = privateKeyToCashAddress(inputPrivKey, this.isChipnet)
         }
       } else {
-        const creatorKeyPair = bchjs.ECPair.fromWIF(creator.wif)
-        keyPairs.push(creatorKeyPair)
+        const creatorKeyResult = decodePrivateKeyWif(creator.wif)
+        if (typeof creatorKeyResult === 'string') {
+          return { success: false, error: creatorKeyResult }
+        }
+        inputPrivKey = creatorKeyResult.privateKey
+        privateKeys.push(inputPrivKey)
         if (!changeAddress) {
-          changeAddress = bchjs.ECPair.toCashAddress(creatorKeyPair)
+          changeAddress = privateKeyToCashAddress(inputPrivKey, this.isChipnet)
         }
       }
+
+      transaction.inputs.push({
+        outpointIndex: bchUtxos.utxos[i].tx_pos,
+        outpointTransactionHash: hexToBin(bchUtxos.utxos[i].tx_hash),
+        sequenceNumber: 0,
+        unlockingBytecode: {
+          compiler,
+          data: {
+            keys: { privateKeys: { key: inputPrivKey } }
+          },
+          valueSatoshis: BigInt(bchUtxos.utxos[i].value),
+          script: 'unlock'
+        }
+      })
     }
 
-    let inputsCount = bchUtxos.utxos.length
     let slpCreateData
-
     if (isNftParent) {
       const nftOpRetGen = new NftOpReturnGenerator()
-      slpCreateData = await nftOpRetGen.generateGroupCreateOpReturn(
+      slpCreateData = nftOpRetGen.generateGroupCreateOpReturn(
         fixedSupply,
         name,
         ticker,
@@ -524,7 +643,7 @@ export default class SlpType1 {
         initialQty
       )
     } else {
-      slpCreateData = await slpOpRetGen.generateGenesisOpReturn(
+      slpCreateData = slpOpRetGen.generateGenesisOpReturn(
         fixedSupply,
         name,
         ticker,
@@ -534,37 +653,29 @@ export default class SlpType1 {
         docHash
       )
     }
-    transactionBuilder.addOutput(slpCreateData, 0)
-    transactionBuilder.addOutput(
-      bchjs.SLP.Address.toLegacyAddress(initialMintRecipient),
-      this.dustLimit
-    )
-    outputsCount += 2
+    transaction.outputs.push({
+      lockingBytecode: slpCreateData,
+      valueSatoshis: 0n
+    })
+    transaction.outputs.push({
+      lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(initialMintRecipient)),
+      valueSatoshis: BigInt(this.dustLimit)
+    })
 
     if (!fixedSupply) {
-      transactionBuilder.addOutput(
-        bchjs.SLP.Address.toLegacyAddress(mintBatonRecipient),
-        this.dustLimit
-      )
-      outputsCount += 1
+      transaction.outputs.push({
+        lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(mintBatonRecipient)),
+        valueSatoshis: BigInt(this.dustLimit)
+      })
     }
 
-    if (feeFunder !== undefined) {
-      inputsCount += 1  // Add extra for the fee funder input
-    }
-    outputsCount += 1  // Add extra for sending the BCH change,if any
-    let byteCount = bchjs.BitcoinCash.getByteCount(
-      {
-        P2PKH: inputsCount
-      },
-      {
-        P2PKH: outputsCount
-      }
-    )
-
-    const feeRate = 1.2 // 1.2 sats/byte fee rate
+    const inputsCount = bchUtxos.utxos.length + (feeFunder !== undefined ? 1 : 0)
+    const outputsCount = transaction.outputs.length + 1
+    const opReturnSize = slpCreateData.length
+    let byteCount = estimateByteCount(inputsCount, outputsCount, opReturnSize)
+    const feeRate = 1.2
     let txFee = Math.ceil(byteCount * feeRate)
-    let creatorRemainder = 0
+    let creatorRemainder = new BigNumber(0)
 
     let feeFunderUtxos
     if (feeFunder !== undefined) {
@@ -583,43 +694,59 @@ export default class SlpType1 {
         }
       }
 
-      // Send BCH change back to creator address, if any
       creatorRemainder = totalInput.minus(totalOutput)
       if (creatorRemainder.isGreaterThanOrEqualTo(this.dustLimit)) {
-        transactionBuilder.addOutput(
-          bchjs.Address.toLegacyAddress(changeAddress),
-          parseInt(creatorRemainder)
-        )
+        transaction.outputs.push({
+          lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(changeAddress)),
+          valueSatoshis: BigInt(creatorRemainder)
+        })
       } else {
         txFee += creatorRemainder.toNumber()
       }
       
       let feeInputContrib = new BigNumber(0)
       for (let i = 0; i < feeFunderUtxos.utxos.length; i++) {
-        transactionBuilder.addInput(feeFunderUtxos.utxos[i].tx_hash, feeFunderUtxos.utxos[i].tx_pos)
         totalInput = totalInput.plus(feeFunderUtxos.utxos[i].value)
         feeInputContrib = feeInputContrib.plus(feeFunderUtxos.utxos[i].value)
-        const feeFunderKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
-        keyPairs.push(feeFunderKeyPair)
+        
+        const feeFunderKeyResult = decodePrivateKeyWif(feeFunder.wif)
+        if (typeof feeFunderKeyResult === 'string') {
+          return { success: false, error: feeFunderKeyResult }
+        }
+        const feeFunderPrivKey = feeFunderKeyResult.privateKey
+        privateKeys.push(feeFunderPrivKey)
+
+        transaction.inputs.push({
+          outpointIndex: feeFunderUtxos.utxos[i].tx_pos,
+          outpointTransactionHash: hexToBin(feeFunderUtxos.utxos[i].tx_hash),
+          sequenceNumber: 0,
+          unlockingBytecode: {
+            compiler,
+            data: {
+              keys: { privateKeys: { key: feeFunderPrivKey } }
+            },
+            valueSatoshis: BigInt(feeFunderUtxos.utxos[i].value),
+            script: 'unlock'
+          }
+        })
       }
 
       const feeFunderRemainder = feeInputContrib.minus(txFee)
       if (feeFunderRemainder.isGreaterThan(this.dustLimit)) {
-        transactionBuilder.addOutput(
-          bchjs.SLP.Address.toLegacyAddress(feeFunder.address),
-          parseInt(feeFunderRemainder)
-        )
+        transaction.outputs.push({
+          lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(feeFunder.address)),
+          valueSatoshis: BigInt(feeFunderRemainder)
+        })
       } else {
         txFee += feeFunderRemainder.toNumber()
       }
     } else {
-      // Send the BCH change back to the wallet, if any
       creatorRemainder = totalInput.minus(totalOutput.plus(txFee))
       if (creatorRemainder.isGreaterThanOrEqualTo(this.dustLimit)) {
-        transactionBuilder.addOutput(
-          bchjs.Address.toLegacyAddress(changeAddress),
-          parseInt(creatorRemainder)
-        )
+        transaction.outputs.push({
+          lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(changeAddress)),
+          valueSatoshis: BigInt(creatorRemainder)
+        })
       } else {
         const creatorRemainderNum = creatorRemainder.toNumber()
         if (creatorRemainderNum < 0) {
@@ -634,26 +761,14 @@ export default class SlpType1 {
       }
     }
 
-    let combinedUtxos = bchUtxos.utxos
-    if (feeFunder !== undefined) {
-      combinedUtxos = bchUtxos.utxos.concat(feeFunderUtxos.utxos)
+    const result = generateTransaction(transaction)
+    if (!result.success) {
+      return {
+        success: false,
+        error: JSON.stringify((result).errors, null, 2)
+      }
     }
-
-    // Sign each token UTXO being consumed.
-    let redeemScript
-    for (let i = 0; i < keyPairs.length; i++) {
-      const utxo = combinedUtxos[i]
-      transactionBuilder.sign(
-        i,
-        keyPairs[i],
-        redeemScript,
-        transactionBuilder.hashTypes.SIGHASH_ALL,
-        parseInt(utxo.value)
-      )
-    }
-
-    const tx = transactionBuilder.build()
-    const hex = tx.toHex()
+    const hex = binToHex(encodeTransaction(result.transaction))
 
     if (broadcast) {
       try {
@@ -730,19 +845,30 @@ export default class SlpType1 {
       }
     }
 
-    const keyPairs = []
+    const template = importWalletTemplate(walletTemplateP2pkhNonHd)
+    if (typeof template === 'string') {
+      return { success: false, error: 'Transaction template error' }
+    }
+    const compiler = walletTemplateToCompilerBCH(template)
 
-    let transactionBuilder = new bchjs.TransactionBuilder()
-    let outputsCount = 0
+    const transaction = {
+      inputs: [],
+      outputs: [],
+      locktime: 0,
+      version: 2
+    }
+
     let totalInputSats = new BigNumber(0)
     let totalOutputSats = new BigNumber(0)
     let totalInputTokens = new BigNumber(0)
 
+    const privateKeys = []
+
     for (let i = 0; i < slpUtxos.utxos.length; i++) {
-      transactionBuilder.addInput(slpUtxos.utxos[i].tx_hash, slpUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(slpUtxos.utxos[i].value)
       totalInputTokens = totalInputTokens.plus(slpUtxos.utxos[i].amount)
-      let utxoKeyPair
+      
+      let inputPrivKey
       if (walletHash) {
         let addressPath
         if (slpUtxos.utxos[i].address_path) {
@@ -750,53 +876,64 @@ export default class SlpType1 {
         } else {
           addressPath = slpUtxos.utxos[i].wallet_index
         }
-        const utxoPkWif = await this.retrievePrivateKey(
+        inputPrivKey = this.retrievePrivateKey(
           minter.mnemonic,
           minter.derivationPath,
           addressPath
         )
-        utxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
       } else {
-        utxoKeyPair = bchjs.ECPair.fromWIF(minter.wif)
+        const decodeResult = decodePrivateKeyWif(minter.wif)
+        if (typeof decodeResult === 'string') {
+          return { success: false, error: decodeResult }
+        }
+        inputPrivKey = decodeResult.privateKey
       }
-      keyPairs.push(utxoKeyPair)
+      privateKeys.push(inputPrivKey)
+
+      transaction.inputs.push({
+        outpointIndex: slpUtxos.utxos[i].tx_pos,
+        outpointTransactionHash: hexToBin(slpUtxos.utxos[i].tx_hash),
+        sequenceNumber: 0,
+        unlockingBytecode: {
+          compiler,
+          data: {
+            keys: { privateKeys: { key: inputPrivKey } }
+          },
+          valueSatoshis: BigInt(slpUtxos.utxos[i].value),
+          script: 'unlock'
+        }
+      })
     }
 
     const slpMintData = slpOpRetGen.generateMintOpReturn(
       slpUtxos.utxos,
       quantity
     )
-    transactionBuilder.addOutput(slpMintData, 0)
-    transactionBuilder.addOutput(
-      bchjs.SLP.Address.toLegacyAddress(additionalMintRecipient),
-      this.dustLimit
-    )
+    transaction.outputs.push({
+      lockingBytecode: slpMintData,
+      valueSatoshis: 0n
+    })
+    transaction.outputs.push({
+      lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(additionalMintRecipient)),
+      valueSatoshis: BigInt(this.dustLimit)
+    })
     totalOutputSats = totalOutputSats.plus(this.dustLimit)
-    outputsCount += 2
 
     if (passMintingBaton) {
-      transactionBuilder.addOutput(
-        bchjs.SLP.Address.toLegacyAddress(mintBatonRecipient),
-        this.dustLimit
-      )
+      transaction.outputs.push({
+        lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(mintBatonRecipient)),
+        valueSatoshis: BigInt(this.dustLimit)
+      })
       totalOutputSats = totalOutputSats.plus(this.dustLimit)
-      outputsCount += 1
     }
 
-    const inputsCount = slpUtxos.utxos.length + 1  // Add extra for BCH fee funding UTXO
-    outputsCount += 1  // Add extra for sending BCH change,if any
-
-    let byteCount = bchjs.BitcoinCash.getByteCount(
-      {
-        P2PKH: inputsCount
-      },
-      {
-        P2PKH: outputsCount
-      }
-    )
-    byteCount += slpMintData.length  // Account for SLP OP_RETURN data byte count
-    const feeRate = 1.2 // 1.2 sats/byte fee rate
+    const inputsCount = slpUtxos.utxos.length + 1
+    const outputsCount = transaction.outputs.length + 1
+    const opReturnSize = slpMintData.length
+    let byteCount = estimateByteCount(inputsCount, outputsCount, opReturnSize)
+    const feeRate = 1.2
     let txFee = Math.ceil(byteCount * feeRate)
+
     let feeFunderHandle
     if (feeFunder.walletHash) {
       feeFunderHandle = 'wallet:' + feeFunder.walletHash
@@ -821,9 +958,9 @@ export default class SlpType1 {
     }
 
     for (let i = 0; i < bchUtxos.utxos.length; i++) {
-      transactionBuilder.addInput(bchUtxos.utxos[i].tx_hash, bchUtxos.utxos[i].tx_pos)
       totalInputSats = totalInputSats.plus(bchUtxos.utxos[i].value)
-      let feeFunderutxoKeyPair
+      
+      let inputPrivKey
       if (feeFunder.walletHash) {
         let addressPath
         if (bchUtxos.utxos[i].address_path) {
@@ -831,28 +968,45 @@ export default class SlpType1 {
         } else {
           addressPath = bchUtxos.utxos[i].wallet_index
         }
-        const utxoPkWif = await this.retrievePrivateKey(
+        inputPrivKey = this.retrievePrivateKey(
           feeFunder.mnemonic,
           feeFunder.derivationPath,
           addressPath
         )
-        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(utxoPkWif)
       } else {
-        feeFunderutxoKeyPair = bchjs.ECPair.fromWIF(feeFunder.wif)
+        const decodeResult = decodePrivateKeyWif(feeFunder.wif)
+        if (typeof decodeResult === 'string') {
+          return { success: false, error: decodeResult }
+        }
+        inputPrivKey = decodeResult.privateKey
       }
-      keyPairs.push(feeFunderutxoKeyPair)
+      privateKeys.push(inputPrivKey)
+
       if (!changeAddress) {
-        changeAddress = bchjs.ECPair.toCashAddress(feeFunderutxoKeyPair)
+        changeAddress = privateKeyToCashAddress(inputPrivKey, this.isChipnet)
       }
+
+      transaction.inputs.push({
+        outpointIndex: bchUtxos.utxos[i].tx_pos,
+        outpointTransactionHash: hexToBin(bchUtxos.utxos[i].tx_hash),
+        sequenceNumber: 0,
+        unlockingBytecode: {
+          compiler,
+          data: {
+            keys: { privateKeys: { key: inputPrivKey } }
+          },
+          valueSatoshis: BigInt(bchUtxos.utxos[i].value),
+          script: 'unlock'
+        }
+      })
     }
 
-    // Last output: send the BCH change back to the wallet.
     const remainderSats = totalInputSats.minus(totalOutputSats.plus(txFee))
     if (remainderSats.isGreaterThanOrEqualTo(this.dustLimit)) {
-      transactionBuilder.addOutput(
-        bchjs.Address.toLegacyAddress(changeAddress),
-        parseInt(remainderSats)
-      )
+      transaction.outputs.push({
+        lockingBytecode: lockingBytecodeFromAddress(toLegacyAddress(changeAddress)),
+        valueSatoshis: BigInt(remainderSats)
+      })
     } else {
       const remainderSatsNum = remainderSats.toNumber()
       if (remainderSatsNum < 0) {
@@ -866,23 +1020,14 @@ export default class SlpType1 {
       }
     }
 
-    const combinedUtxos = slpUtxos.utxos.concat(bchUtxos.utxos)
-
-    // Sign each token UTXO being consumed.
-    let redeemScript
-    for (let i = 0; i < combinedUtxos.length; i++) {
-      const utxo = combinedUtxos[i]
-      transactionBuilder.sign(
-        i,
-        keyPairs[i],
-        redeemScript,
-        transactionBuilder.hashTypes.SIGHASH_ALL,
-        parseInt(utxo.value)
-      )
+    const result = generateTransaction(transaction)
+    if (!result.success) {
+      return {
+        success: false,
+        error: JSON.stringify((result).errors, null, 2)
+      }
     }
-
-    const tx = transactionBuilder.build()
-    const hex = tx.toHex()
+    const hex = binToHex(encodeTransaction(result.transaction))
 
     if (broadcast) {
       try {
@@ -899,5 +1044,4 @@ export default class SlpType1 {
       }
     }
   }
-
 }

@@ -1,8 +1,16 @@
-import { CashAddressNetworkPrefix, encodeCashAddress, CashAddressType, decodeCashAddressFormat, decodeCashAddressFormatWithoutPrefix, decodeCashAddressVersionByte, cashAddressTypeBitsToType } from "@bitauth/libauth";
-
-import BCHJS from "@psf/bch-js";
-const bchjs = new BCHJS()
-
+import {
+  CashAddressNetworkPrefix,
+  encodeCashAddress,
+  CashAddressType,
+  decodeCashAddressFormat,
+  decodeCashAddressFormatWithoutPrefix,
+  decodeCashAddressVersionByte,
+  cashAddressTypeBitsToType,
+  decodeBase58AddressFormat,
+  cashAddressToLockingBytecode,
+  lockingBytecodeToBase58Address,
+  lockingBytecodeToCashAddress
+} from "@bitauth/libauth";
 
 export enum SLPNetworkPrefix {
   mainnet = "simpleledger",
@@ -28,19 +36,33 @@ export default class Address {
 
   isLegacyAddress () {
     try {
-      return bchjs.Address.isLegacyAddress(this.address)
+      const result = decodeBase58AddressFormat(this.address);
+      return typeof result !== "string";
     } catch {
       return false;
     }
   }
 
   isP2SH() {
-    const decoded = this._decodeCashaddr(this.address);
-    return [CashAddressType.p2sh, CashAddressType.p2shWithTokens].includes(decoded.type);
+    try {
+      const decoded = this._decodeCashaddr(this.address);
+      return [CashAddressType.p2sh, CashAddressType.p2shWithTokens].includes(decoded.type);
+    } catch {
+      return false;
+    }
   }
 
   toLegacyAddress () {
-    return bchjs.Address.toLegacyAddress(this.toCashAddress())
+    if (this.isLegacyAddress()) {
+      return this.address;
+    }
+    const cashAddr = this.toCashAddress();
+    const result = cashAddressToLockingBytecode(cashAddr);
+    if (typeof result === "string") {
+      throw new Error(result);
+    }
+    const network = result.prefix === CashAddressNetworkPrefix.testnet ? "testnet" : "mainnet";
+    return lockingBytecodeToBase58Address(result.bytecode, network);
   }
 
   toCashAddress () {
@@ -49,7 +71,7 @@ export default class Address {
     const type = decoded.type === CashAddressType.p2pkhWithTokens ? CashAddressType.p2pkh : (
       decoded.type === CashAddressType.p2shWithTokens ? CashAddressType.p2sh : decoded.type
     )
-    return encodeCashAddress(CashAddressNetworkPrefix[network], type, decoded.payload);
+    return encodeCashAddress({ prefix: CashAddressNetworkPrefix[network], type, payload: decoded.payload }).address;
   }
 
   isCashAddress () {
@@ -76,7 +98,7 @@ export default class Address {
     const type = decoded.type === CashAddressType.p2pkh ? CashAddressType.p2pkhWithTokens : (
       decoded.type === CashAddressType.p2sh ? CashAddressType.p2shWithTokens : decoded.type
     )
-    return encodeCashAddress(CashAddressNetworkPrefix[network], type, decoded.payload);
+    return encodeCashAddress({ prefix: CashAddressNetworkPrefix[network], type, payload: decoded.payload }).address;
   }
 
   isMainnetCashAddress () {
@@ -109,7 +131,7 @@ export default class Address {
   toSLPAddress () {
     const decoded = this._decodeCashaddr(this.toCashAddress());
     const network = Object.keys(CashAddressNetworkPrefix)[Object.values(CashAddressNetworkPrefix).findIndex(val => val === decoded.prefix)] ?? Object.keys(SLPNetworkPrefix)[Object.values(SLPNetworkPrefix).findIndex(val => val === decoded.prefix)];
-    return encodeCashAddress(SLPNetworkPrefix[network], decoded.type, decoded.payload);
+    return encodeCashAddress({ prefix: SLPNetworkPrefix[network], type: decoded.type, payload: decoded.payload }).address;
   }
 
   isMainnetSLPAddress () {
@@ -165,7 +187,16 @@ export default class Address {
     let result: any;
     // If legacy address convert first to cash address
     if (this.isLegacyAddress()) {
-      address = bchjs.Address.toCashAddress(address)
+      const legacyResult = decodeBase58AddressFormat(address);
+      if (typeof legacyResult === "string") {
+        throw new Error(legacyResult);
+      }
+      // Determine network from version byte
+      const network = legacyResult.version === 0 ? CashAddressNetworkPrefix.mainnet : 
+                      legacyResult.version === 5 ? CashAddressNetworkPrefix.mainnet :
+                      CashAddressNetworkPrefix.testnet;
+      const type = legacyResult.version === 0 || legacyResult.version === 111 ? CashAddressType.p2pkh : CashAddressType.p2sh;
+      address = encodeCashAddress({ prefix: network, type, payload: legacyResult.payload }).address;
     }
     // If the address has a prefix decode it as is
     if (address.includes(":")) {
