@@ -11,10 +11,24 @@ export function setupAxiosMock(mockUrl, responseData, instance) {
     // install our interceptors
     (instance.interceptors as any).request.use((config) => {
       const url = config.url!;
+      // Build full URL with params for matching
+      let fullUrl = url;
+      if (config.params && Object.keys(config.params).length > 0) {
+        const params = new URLSearchParams();
+        for (const [key, value] of Object.entries(config.params)) {
+          if (value !== undefined && value !== null) {
+            params.append(key, String(value));
+          }
+        }
+        const paramStr = params.toString();
+        if (paramStr) {
+          fullUrl = url + (url.includes('?') ? '&' : '?') + paramStr;
+        }
+      }
 
-      if ((instance.interceptors as any).mocks[url]) {
+      if ((instance.interceptors as any).mocks[fullUrl]) {
         // if we have set up a mocked response for this url, cancel the actual request with a cancelToken containing our mocked data
-        const mockedResponse = (instance.interceptors as any).mocks[url];
+        const mockedResponse = (instance.interceptors as any).mocks[fullUrl];
         return {
           ...config,
           cancelToken: new axios.CancelToken((cancel) =>
