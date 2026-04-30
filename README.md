@@ -297,6 +297,37 @@ addr.toTokenAddress()             // bitcoincash:zqz95enwd6qdcy5wnf05hp590sjjknw
 addr.toLegacyAddress()            // 1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2
 ```
 
+### Derive Addresses from xpub
+```javascript
+import Watchtower, { Address } from 'watchtower-cash-js'
+const watchtower = new Watchtower()
+
+const xpub = 'xpub6ByHsPNSQXTWZ7PLESMY2FufyYWtLXagSUpMQq7Un96SiThZH2iJB1X7pwviH1WtKVeDP6K8d6xxFzzoaFzF3s8BKCZx8oEDdDkNnp4owAZ'
+const addressIndex = 0
+
+// Returns { receiving: '<bch-address>', change: '<bch-address>' }
+const addresses = Address.fromXpub(xpub, addressIndex)
+
+// For chipnet (testnet)
+const chipnetAddresses = Address.fromXpub(xpub, addressIndex, true)
+
+// Subscribe the derived addresses to Watchtower
+const subscribeData = {
+  projectId: '0000-0000-0000',
+  addresses: {
+    receiving: addresses.receiving,
+    change: addresses.change
+  },
+  walletHash: 'your-wallet-hash',
+  addressIndex: addressIndex,
+  webhookUrl: 'https://xxx.com/webhook-call-receiver'
+}
+
+watchtower.subscribe(subscribeData).then(result => {
+  console.log(result)
+})
+```
+
 ### API Reference
 
 #### `Watchtower`
@@ -335,6 +366,7 @@ Import separately: `import { Address } from 'watchtower-cash-js'`
 
 | Method | Returns |
 |--------|---------|
+| `Address.fromXpub(xpub, addressIndex?, isChipnet?)` | `{ receiving: string, change: string }` |
 | `isCashAddress()` | `boolean` |
 | `isMainnetCashAddress()` | `boolean` |
 | `isTestnetCashAddress()` | `boolean` |

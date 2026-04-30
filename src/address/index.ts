@@ -8,10 +8,43 @@ import {
   cashAddressTypeBitsToType,
   decodeBase58AddressFormat,
   cashAddressToLockingBytecode,
-  lockingBytecodeToBase58Address
+  lockingBytecodeToBase58Address,
+  decodeHdPublicKey,
+  deriveHdPublicNodeChild,
+  hash160,
 } from "@bitauth/libauth";
 
 export default class Address {
+  static fromXpub (xpub: string, addressIndex = 0, isChipnet = false): { receiving: string; change: string } {
+    const decoded = decodeHdPublicKey(xpub)
+    if (typeof decoded === 'string') {
+      throw new Error(decoded)
+    }
+
+    const accountNode = decoded.node
+    const receivingNode = deriveHdPublicNodeChild(deriveHdPublicNodeChild(accountNode, 0), addressIndex)
+    const changeNode = deriveHdPublicNodeChild(deriveHdPublicNodeChild(accountNode, 1), addressIndex)
+
+    const receivingHash = hash160(receivingNode.publicKey)
+    const changeHash = hash160(changeNode.publicKey)
+
+    const prefix = isChipnet ? CashAddressNetworkPrefix.testnet : CashAddressNetworkPrefix.mainnet
+
+    const receiving = encodeCashAddress({
+      prefix,
+      type: CashAddressType.p2pkh,
+      payload: receivingHash
+    }).address
+
+    const change = encodeCashAddress({
+      prefix,
+      type: CashAddressType.p2pkh,
+      payload: changeHash
+    }).address
+
+    return { receiving, change }
+  }
+
   constructor (public address) {
     this.address = address
   }
