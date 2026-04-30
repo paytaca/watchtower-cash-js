@@ -20,6 +20,9 @@ test('Test Address.fromXpub', () => {
 
   // invalid xpub
   expect(() => Address.fromXpub('invalid-xpub')).toThrow()
+
+  // negative addressIndex
+  expect(() => Address.fromXpub(xpub, -1)).toThrow('addressIndex must be non-negative')
 })
 
 test('Test Address', () => {
