@@ -8,10 +8,54 @@ import {
   cashAddressTypeBitsToType,
   decodeBase58AddressFormat,
   cashAddressToLockingBytecode,
-  lockingBytecodeToBase58Address
+  lockingBytecodeToBase58Address,
+  decodeHdPublicKey,
+  deriveHdPublicNodeChild,
+  hash160,
 } from "@bitauth/libauth";
 
 export default class Address {
+  /**
+   * Derive receiving and change addresses from an account-level xpub.
+   * @param xpub - The extended public key (xpub) at account level (e.g. m/44'/145'/0')
+   * @param addressIndex - The address index to derive (default: 0)
+   * @param isChipnet - Whether to generate chipnet (testnet) addresses (default: false)
+   * @returns Object containing receiving and change addresses
+   */
+  static fromXpub (xpub: string, addressIndex = 0, isChipnet = false): { receiving: string; change: string } {
+    if (addressIndex < 0) {
+      throw new Error('addressIndex must be non-negative')
+    }
+
+    const decoded = decodeHdPublicKey(xpub)
+    if (typeof decoded === 'string') {
+      throw new Error(decoded)
+    }
+
+    const accountNode = decoded.node
+    const receivingNode = deriveHdPublicNodeChild(deriveHdPublicNodeChild(accountNode, 0), addressIndex)
+    const changeNode = deriveHdPublicNodeChild(deriveHdPublicNodeChild(accountNode, 1), addressIndex)
+
+    const receivingHash = hash160(receivingNode.publicKey)
+    const changeHash = hash160(changeNode.publicKey)
+
+    const prefix = isChipnet ? CashAddressNetworkPrefix.testnet : CashAddressNetworkPrefix.mainnet
+
+    const receiving = encodeCashAddress({
+      prefix,
+      type: CashAddressType.p2pkh,
+      payload: receivingHash
+    }).address
+
+    const change = encodeCashAddress({
+      prefix,
+      type: CashAddressType.p2pkh,
+      payload: changeHash
+    }).address
+
+    return { receiving, change }
+  }
+
   constructor (public address) {
     this.address = address
   }
