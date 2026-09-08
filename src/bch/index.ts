@@ -461,6 +461,7 @@ export default class BCH {
       version: 2,
     }
 
+    let satsFromCashtokens = 0n;
     let combinedUtxos: CashtokenUtxo[] = [];
     // we are sending cashtokens
     if (token?.tokenId) {
@@ -538,6 +539,7 @@ export default class BCH {
       })
 
       combinedUtxos = cashtokensUtxos.utxos;
+      satsFromCashtokens = cashtokensUtxos.utxos.reduce((subtotal, tokenUtxo) => subtotal + tokenUtxo.value, 0n)
     }
 
     let totalInput = 0n
@@ -581,8 +583,9 @@ export default class BCH {
     }
 
     if (feeFunder === undefined) {
-      if (bchUtxos.cumulativeValue < totalSendAmountSats) {
-        let lackingSats = totalSendAmountSats - bchUtxos.cumulativeValue
+      const combinedSats = satsFromCashtokens + bchUtxos.cumulativeValue
+      if (combinedSats < totalSendAmountSats) {
+        let lackingSats = totalSendAmountSats - combinedSats
         const dust = BigInt(this.getDustLimit(true))
 
         if (lackingSats < dust) {
@@ -592,7 +595,7 @@ export default class BCH {
         return {
           lackingSats,
           success: false,
-          error: `not enough balance in sender (${bchUtxos.cumulativeValue}) to cover the send amount (${totalSendAmountSats})`
+          error: `not enough balance in sender (${combinedSats}) to cover the send amount (${totalSendAmountSats})`
         }
       }
     }
